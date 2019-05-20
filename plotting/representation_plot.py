@@ -121,8 +121,8 @@ def plotImage(image, name='Observation Sample'):
     """
     # Reorder channels
     if image.shape[0] == 3 and len(image.shape) == 3:
-        # (n_channels, height, width) -> (width, height, n_channels)
-        image = np.transpose(image, (2, 1, 0))
+        # (n_channels, height, width) -> (height, width, n_channels)
+        image = np.transpose(image, (2, 0, 1))
     updateDisplayMode()
     fig = plt.figure(name)
     plt.imshow(image, interpolation='nearest')

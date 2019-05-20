@@ -3,7 +3,7 @@ from __future__ import print_function, division
 import numpy as np
 
 
-def preprocessInput(x, mode="image_net"):
+def preprocessInput(x, mode="tf"):
     """
     Normalize input
     :param x: (np.ndarray) (RGB image with values between [0, 255])
@@ -44,8 +44,8 @@ def deNormalize(x, mode="image_net"):
     """
     # Reorder channels when we have only one image
     if x.shape[0] == 3 and len(x.shape) == 3:
-        # (n_channels, height, width) -> (width, height, n_channels)
-        x = np.transpose(x, (2, 1, 0))
+        # (n_channels, height, width) -> (height, width, n_channels)
+        x = np.transpose(x, (2, 0, 1))
     assert x.shape[-1] == 3, "Color channel must be at the end of the tensor {}".format(x.shape)
 
     if mode == "tf":
