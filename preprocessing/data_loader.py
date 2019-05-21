@@ -50,7 +50,7 @@ def preprocessImage(image, convert_to_rgb=True, apply_occlusion=False, occlusion
     if convert_to_rgb:
         im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
     # Normalize
-    im = preprocessInput(im.astype(np.float32), mode="image_net")
+    im = preprocessInput(im.astype(np.float32), mode="tf")
 
     if apply_occlusion:
         h_1 = np.random.randint(IMAGE_HEIGHT)
