@@ -35,7 +35,7 @@ def preprocessInput(x, mode="tf"):
     return x
 
 
-def deNormalize(x, mode="image_net"):
+def deNormalize(x, mode="tf"):
     """
     deNormalize data (transform input to [0, 1])
     :param x: (np.ndarray)

@@ -549,7 +549,7 @@ class SRL4robotics(BaseLearner):
 
                             elif obs[0].shape[0] % 3 == 0:  # Multi-RGB
                                 for k in range(obs[0].shape[0] // 3):
-                                    plotImage(deNormalize(detachToNumpy(obs[0][k * 3:(k + 1) * 3, :, :]), "image_net"),
+                                    plotImage(deNormalize(detachToNumpy(obs[0][k * 3:(k + 1) * 3, :, :])),
                                               "Input Image {} (Train)".format(k + 1))
                                     if self.use_dae:
                                         plotImage(deNormalize(detachToNumpy(noisy_obs[0][k * 3:(k + 1) * 3, :, :])),
