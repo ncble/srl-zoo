@@ -9,7 +9,7 @@ from pprint import pprint
 
 
 import numpy as np
-import torch as th
+import torch
 from tqdm import tqdm
 
 from losses.losses import LossManager, autoEncoderLoss, roboticPriorsLoss, tripletLoss, rewardModelLoss, \
@@ -22,7 +22,7 @@ from preprocessing.data_loader import DataLoader
 from preprocessing.utils import deNormalize
 from utils import printRed, detachToNumpy, printYellow
 from .modules import SRLModules, SRLModulesSplit
-from .priors import Discriminator
+from .priors import Discriminator as PriorDiscriminator
 
 MAX_BATCH_SIZE_GPU = 256  # For plotting, max batch_size before having memory issues
 EPOCH_FLAG = 1  # Plot every 1 epoch
@@ -56,13 +56,13 @@ class BaseLearner(object):
         self.use_dae = False
         # Seed the random generator
         np.random.seed(seed)
-        th.manual_seed(seed)
+        torch.manual_seed(seed)
         if cuda:
             # Make CuDNN Determinist
-            th.backends.cudnn.deterministic = True
-            th.cuda.manual_seed(seed)
+            torch.backends.cudnn.deterministic = True
+            torch.cuda.manual_seed(seed)
 
-        self.device = th.device("cuda" if th.cuda.is_available() and cuda else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() and cuda else "cpu")
 
     def _predFn(self, observations):
         """
@@ -142,7 +142,7 @@ class SRL4robotics(BaseLearner):
     :param occlusion_percentage: (float) max percentage of occlusion when using DAE
     """
 
-    def __init__(self, state_dim, model_type="resnet", inverse_model_type="linear", log_folder="logs/default",
+    def __init__(self, state_dim, img_shape=None, model_type="resnet", inverse_model_type="linear", log_folder="logs/default",
                  seed=1, learning_rate=0.001, l1_reg=0.0, l2_reg=0.0, cuda=False,
                  multi_view=False, losses=None, losses_weights_dict=None, n_actions=6, beta=1,
                  split_dimensions=-1, path_to_dae=None, state_dim_dae=200, occlusion_percentage=None):
@@ -154,8 +154,9 @@ class SRL4robotics(BaseLearner):
         self.dim_action = n_actions
         self.beta = beta
         self.denoiser = None
+        self.img_shape = img_shape
 
-        if model_type in ["linear", "mlp", "resnet", "custom_cnn"] \
+        if model_type in ["linear", "mlp", "resnet", "custom_cnn", "gan"] \
                 or "autoencoder" in losses or "vae" in losses:
             self.use_forward_loss = "forward" in losses
             self.use_inverse_loss = "inverse" in losses
@@ -176,7 +177,7 @@ class SRL4robotics(BaseLearner):
                                              model_type=model_type, cuda=cuda, losses=losses,
                                              split_dimensions=split_dimensions, inverse_model_type=inverse_model_type)
             else:
-                self.model = SRLModules(state_dim=self.state_dim, action_dim=self.dim_action, model_type=model_type,
+                self.model = SRLModules(state_dim=self.state_dim, img_shape=self.img_shape, action_dim=self.dim_action, model_type=model_type,
                                         cuda=cuda, losses=losses, inverse_model_type=inverse_model_type)
         else:
             raise ValueError("Unknown model: {}".format(model_type))
@@ -184,21 +185,25 @@ class SRL4robotics(BaseLearner):
         print("Using {} model".format(model_type))
 
         self.cuda = cuda
-        self.device = th.device("cuda" if th.cuda.is_available() and cuda else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() and cuda else "cpu")
 
         if self.episode_prior:
-            self.discriminator = Discriminator(2 * self.state_dim).to(self.device)
-
-        self.model = self.model.to(self.device)
-
-        learnable_params = [param for param in self.model.parameters() if param.requires_grad]
-
-        if self.episode_prior:
-            learnable_params += [p for p in self.discriminator.parameters()]
-
-        self.optimizer = th.optim.Adam(learnable_params, lr=learning_rate)
-        self.log_folder = log_folder
+            self.prior_discriminator = PriorDiscriminator(2 * self.state_dim).to(self.device)
         self.model_type = model_type
+        self.model = self.model.to(self.device)
+        
+        if self.model_type != "gan":
+            learnable_params = [param for param in self.model.parameters() if param.requires_grad]
+            if self.episode_prior:
+                learnable_params += [p for p in self.prior_discriminator.parameters()]
+            self.optimizer = torch.optim.Adam(learnable_params, lr=learning_rate)
+        else:
+            assert not self.episode_prior, "NotImplementedError"
+            self.optimizer_G = torch.optim.Adam(self.model.generator.parameters(), lr=learning_rate, betas=(0.5, 0.9))
+            self.optimizer_D = torch.optim.Adam(self.model.discriminator.parameters(), lr=learning_rate, betas=(0.5, 0.9))
+
+        self.log_folder = log_folder
+        
 
         # Default weights that are updated with the weights passed to the script
         self.losses_weights_dict = {"forward": 1.0, "inverse": 2.0, "reward": 1.0, "priors": 1.0,
@@ -215,7 +220,7 @@ class SRL4robotics(BaseLearner):
             print("Using a maximum occlusion surface of {}".format(str(self.occlusion_percentage)))
 
     @staticmethod
-    def loadSavedModel(log_folder, valid_models, cuda=True):
+    def loadSavedModel(log_folder, valid_models, cuda=True, img_shape=None):
         """
         Load a saved SRL model
 
@@ -249,7 +254,7 @@ class SRL4robotics(BaseLearner):
         difference = set(losses).symmetric_difference(valid_models)
         assert set(losses).intersection(valid_models) != set(), "Error: Not supported losses " + ", ".join(difference)
 
-        srl_model = SRL4robotics(state_dim, model_type=model_type, cuda=cuda, multi_view=multi_view,
+        srl_model = SRL4robotics(state_dim, img_shape=img_shape, model_type=model_type, cuda=cuda, multi_view=multi_view,
                                  losses=losses, n_actions=n_actions, split_dimensions=split_dimensions,
                                  inverse_model_type=inverse_model_type, occlusion_percentage=occlusion_percentage)
         srl_model.model.load_state_dict(th.load(model_path))
@@ -316,7 +321,7 @@ class SRL4robotics(BaseLearner):
 
         if self.use_vae and self.perceptual_similarity_loss and self.path_to_dae is not None:
 
-            self.denoiser = SRLModules(state_dim=self.state_dim_dae, action_dim=self.dim_action,
+            self.denoiser = SRLModules(state_dim=self.state_dim_dae, img_shape=self.img_shape, action_dim=self.dim_action,
                                        model_type="custom_cnn",
                                        cuda=self.cuda, losses=["dae"])
             self.denoiser.load_state_dict(th.load(self.path_to_dae))
@@ -329,10 +334,10 @@ class SRL4robotics(BaseLearner):
             idx_to_episode = {idx: episode_idx for idx, episode_idx in enumerate(np.cumsum(episode_starts))}
             minibatch_episodes = [[idx_to_episode[i] for i in minibatch] for minibatch in minibatchlist]
 
-        data_loader = DataLoader(minibatchlist, images_path, n_workers=N_WORKERS, multi_view=self.multi_view,
+        data_loader = DataLoader(minibatchlist, images_path, img_shape=self.img_shape, n_workers=N_WORKERS, multi_view=self.multi_view,
                                  use_triplets=self.use_triplets, is_training=True, apply_occlusion=self.use_dae,
                                  occlusion_percentage=self.occlusion_percentage)
-        test_data_loader = DataLoader(test_minibatchlist, images_path, n_workers=N_WORKERS, multi_view=self.multi_view,
+        test_data_loader = DataLoader(test_minibatchlist, images_path, img_shape=self.img_shape, n_workers=N_WORKERS, multi_view=self.multi_view,
                                       use_triplets=self.use_triplets, max_queue_len=1, is_training=False,
                                       apply_occlusion=self.use_dae, occlusion_percentage=self.occlusion_percentage)
         # TRAINING -----------------------------------------------------------------------------------------------------
@@ -349,7 +354,7 @@ class SRL4robotics(BaseLearner):
             global N_EPOCHS
             N_EPOCHS = 0
             printYellow("Skipping training because using random features")
-            th.save(self.model.state_dict(), best_model_path)
+            torch.save(self.model.state_dict(), best_model_path)
 
         for epoch in range(N_EPOCHS):
             # In each epoch, we do a full pass over the training data:
@@ -415,7 +420,7 @@ class SRL4robotics(BaseLearner):
 
                 # Actions associated to the observations of the current minibatch
                 actions_st = actions[minibatchlist[minibatch_idx]]
-                actions_st = th.from_numpy(actions_st).view(-1, 1).requires_grad_(False).to(self.device)
+                actions_st = torch.from_numpy(actions_st).view(-1, 1).requires_grad_(False).to(self.device)
 
                 # L1 regularization
                 if self.losses_weights_dict['l1_reg'] > 0:
@@ -444,7 +449,7 @@ class SRL4robotics(BaseLearner):
                     rewards_st = rewards[minibatchlist[minibatch_idx]].copy()
                     # Removing negative reward
                     rewards_st[rewards_st == -1] = 0
-                    rewards_st = th.from_numpy(rewards_st).to(self.device)
+                    rewards_st = torch.from_numpy(rewards_st).to(self.device)
                     rewards_pred = self.model.rewardModel(states, next_states)
                     rewardModelLoss(rewards_pred, rewards_st.long(), weight=self.losses_weights_dict['reward'],
                                     loss_manager=loss_manager)
@@ -469,12 +474,12 @@ class SRL4robotics(BaseLearner):
 
                 if self.reward_prior:
                     rewards_st = rewards[minibatchlist[minibatch_idx]]
-                    rewards_st = th.from_numpy(rewards_st).float().view(-1, 1).to(self.device)
+                    rewards_st = torch.from_numpy(rewards_st).float().view(-1, 1).to(self.device)
                     rewardPriorLoss(states, rewards_st, weight=self.losses_weights_dict['reward-prior'],
                                     loss_manager=loss_manager)
 
                 if self.episode_prior:
-                    episodePriorLoss(minibatch_idx, minibatch_episodes, states, self.discriminator,
+                    episodePriorLoss(minibatch_idx, minibatch_episodes, states, self.prior_discriminator,
                                      BALANCED_SAMPLING, weight=self.losses_weights_dict['episode-prior'],
                                      loss_manager=loss_manager)
                 if self.use_triplets:
@@ -515,7 +520,7 @@ class SRL4robotics(BaseLearner):
             # Save best model
             if val_loss < best_error:
                 best_error = val_loss
-                th.save(self.model.state_dict(), best_model_path)
+                torch.save(self.model.state_dict(), best_model_path)
 
             if np.isnan(train_loss):
                 printRed("NaN Loss, consider increasing NOISE_STD in the gaussian noise layer")
@@ -527,7 +532,7 @@ class SRL4robotics(BaseLearner):
                                                                                 val_loss))
                 print("{:.2f}s/epoch".format((time.time() - start_time) / (epoch + 1)))
                 if DISPLAY_PLOTS:
-                    with th.no_grad():
+                    with torch.no_grad():
                         self.model.eval()
                         # Optionally plot the current state space
                         plotRepresentation(self.predStatesWithDataLoader(test_data_loader), rewards,
@@ -573,7 +578,7 @@ class SRL4robotics(BaseLearner):
         print("Predicting states for all the observations...")
         # return predicted states for training observations
         self.model.eval()
-        with th.no_grad():
+        with torch.no_grad():
             pred_states = self.predStatesWithDataLoader(test_data_loader)
         pairs_loss_weight = [k for k in zip(loss_manager.names, loss_manager.weights)]
         return loss_history, pred_states, pairs_loss_weight

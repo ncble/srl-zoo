@@ -98,7 +98,7 @@ print("batch_size = {}".format(batch_size))
 # Create data loader
 minibatchlist = DataLoader.createTestMinibatchList(len(images_path), batch_size)
 # Training = False -> outputs only the current observation, not a tuple
-data_loader = DataLoader(minibatchlist, images_path, n_workers=4, is_training=False)
+data_loader = DataLoader(minibatchlist, images_path, img_shape=None, n_workers=4, is_training=False)
 
 print("Fitting PCA with n_components={}".format(n_components))
 ipca = IncrementalPCA(n_components=n_components)

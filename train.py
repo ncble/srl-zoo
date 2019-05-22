@@ -24,6 +24,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='State Representation Learning with PyTorch')
     parser.add_argument('--epochs', type=int, default=30, metavar='N',
                         help='number of epochs to train (default: 30)')
+    parser.add_argument('--img-shape', type=tuple, default=None,
+                        help='image shape (default None, i.e. (3,224,224))')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
     parser.add_argument('--state-dim', type=int, default=2, help='state dimension (default: 2)')
@@ -170,7 +172,7 @@ if __name__ == '__main__':
 
     print('Learning a state representation ... ')
 
-    srl = SRL4robotics(args.state_dim, model_type=args.model_type, inverse_model_type=args.inverse_model_type,
+    srl = SRL4robotics(args.state_dim, img_shape=args.img_shape, model_type=args.model_type, inverse_model_type=args.inverse_model_type,
                        seed=args.seed,
                        log_folder=args.log_folder, learning_rate=args.learning_rate,
                        l1_reg=args.l1_reg, l2_reg=args.l2_reg, cuda=args.cuda, multi_view=args.multi_view,

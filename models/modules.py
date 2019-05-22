@@ -4,22 +4,24 @@ from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel
 from .priors import SRLConvolutionalNetwork, SRLDenseNetwork, SRLLinear
 from .triplet import EmbeddingNet
 from .models import *
-
+from .gan import Generator, Discriminator, Encoder, UNet
 # In case of importing into the SRL repository
 try:
-    from preprocessing.preprocess import getInputDim
+    from preprocessing.preprocess import N_CHANNELS
 # In case of importing material from modules.py into the external Robotics RL repository,
 # consider the relative path to the package
 except ImportError:
-    from ..preprocessing.preprocess import getInputDim
+    from ..preprocessing.preprocess import N_CHANNELS
 
+from ..utils import printRed
 
 class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
-    def __init__(self, state_dim=2, action_dim=6, cuda=False, model_type="custom_cnn", losses=None,
+    def __init__(self, state_dim=2, img_shape=None, action_dim=6, cuda=False, model_type="custom_cnn", losses=None,
                  inverse_model_type="linear"):
         """
         A model that can combine AE/VAE + Inverse + Forward + Reward models
         :param state_dim: (int)
+        :param img_shape: (tuple or None) channels first ! 
         :param action_dim: (int)
         :param cuda: (bool)
         :param model_type: (str)
@@ -33,11 +35,21 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         BaseRewardModel.__init__(self)
 
         self.cuda = cuda
-
+        if img_shape is None:
+            self.img_shape = (N_CHANNELS, 224, 224)
+        else:
+            if N_CHANNELS != img_shape[0]:
+                print("="*50)
+                printRed("Warning: N_CHANNELS={} is inconsistent with argument img_shape={}.".format(N_CHANNELS, img_shape[0]))
+                print("="*50)
+                self.img_shape = (N_CHANNELS, ) + img_shape[1:]
+            else:
+                self.img_shape = img_shape
         self.initForwardNet(state_dim, action_dim)
         self.initInverseNet(state_dim, action_dim, model_type=inverse_model_type)
         self.initRewardNet(state_dim)
-
+        def getInputDim():
+            return np.prod(self.img_shape)
         # Architecture
         if model_type == "custom_cnn":
             if "autoencoder" in losses or "dae" in losses:
@@ -67,6 +79,12 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
 
         elif model_type == "resnet":
             self.model = SRLConvolutionalNetwork(state_dim, cuda)
+        elif model_type == "gan":
+            self.model = Encoder(self.img_shape, state_dim, spectral_norm=False)
+            self.generator = Generator(self.img_shape, state_dim, spectral_norm=True)
+            self.discriminator = Discriminator(self.img_shape, state_dim, spectral_norm=True)
+        
+        # elif: [Add new model here !]
 
         if losses is not None and "triplet" in losses:
             # pretrained resnet18 with fixed weights

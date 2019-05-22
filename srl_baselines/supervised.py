@@ -16,7 +16,6 @@ from pipeline import saveConfig
 from plotting.losses_plot import plotLosses
 from plotting.representation_plot import plotRepresentation, plt
 from preprocessing.data_loader import SupervisedDataLoader
-from preprocessing.preprocess import getInputDim
 from train import buildConfig
 from utils import parseDataFolder, createFolder, getInputBuiltin, loadData
 
@@ -28,7 +27,7 @@ TEST_BATCH_SIZE = 256
 
 class SupervisedLearning(BaseLearner):
 
-    def __init__(self, state_dim, model_type="resnet", log_folder="logs/default",
+    def __init__(self, state_dim, img_shape, model_type="resnet", log_folder="logs/default",
                  seed=1, learning_rate=0.001, cuda=False):
         """
         :param state_dim: (int)
@@ -46,7 +45,7 @@ class SupervisedLearning(BaseLearner):
         elif model_type in ["cnn", "custom_cnn"]:
             self.model = CustomCNN(self.state_dim)
         elif model_type == "mlp":
-            self.model = DenseNetwork(getInputDim(), self.state_dim)
+            self.model = DenseNetwork(np.prod(img_shape), self.state_dim)
         else:
             raise ValueError("Unknown model: {}".format(model_type))
         print("Using {} model".format(model_type))

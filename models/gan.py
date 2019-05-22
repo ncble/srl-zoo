@@ -9,7 +9,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
-
+from .models import BaseModelSRL
 
 def ConvSN2d(in_channels, out_channels, kernel_size,
              stride=1,
@@ -229,7 +229,7 @@ class UNetUpBlock(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, state_dim, img_shape,
+    def __init__(self, img_shape, state_dim,
                  unet_depth=3,
                  unet_ch=32,
                  spectral_norm=False,
@@ -298,81 +298,138 @@ class Discriminator(nn.Module):
             ['lrelu', nn.LeakyReLU(negative_slope=0.2)],
             ['prelu', nn.PReLU()],
             ['tanh', nn.Tanh()],
-            ['relu', nn.ReLU()]
+            ['relu', nn.ReLU()],
+            ['sigmoid', nn.Sigmoid()]
         ])
         self.modules_list = nn.ModuleList([])
+        COUNT_IMG_REDUCE = 0
 
         def d_layer(prev_channels, out_channels, kernel_size=4, spectral_norm=False):
             """Discriminator layer"""
+            nonlocal COUNT_IMG_REDUCE
+            COUNT_IMG_REDUCE += 1
             if spectral_norm:
                 # [stride=2] padding = (kernel_size/2) -1
                 layer = ConvSN2d(prev_channels, out_channels,
-                               kernel_size=kernel_size, stride=2, padding=1)
+                                 kernel_size=kernel_size, stride=2, padding=1)
             else:
                 # [stride=2] padding = (kernel_size/2) -1
                 layer = nn.Conv2d(prev_channels, out_channels,
-                                kernel_size=kernel_size, stride=2, padding=1)
-            return [layer, self.activations['lrelu']]#, out.out_channels
+                                  kernel_size=kernel_size, stride=2, padding=1)
+            return [layer, self.activations['lrelu']]  # , out.out_channels
 
         start_chs = self.img_shape[0]
-        self.modules_list.extend(d_layer(start_chs, self.d_chs, spectral_norm=self.spectral_norm))
-        self.modules_list.extend(d_layer(self.d_chs, self.d_chs*2, spectral_norm=self.spectral_norm))
-        self.modules_list.extend(d_layer(self.d_chs*2, self.d_chs*4, spectral_norm=self.spectral_norm))
-        self.modules_list.extend(d_layer(self.d_chs*4, self.d_chs*8, spectral_norm=self.spectral_norm))
-        self.modules_list.extend(d_layer(self.d_chs*8, self.d_chs*8, spectral_norm=self.spectral_norm))
+        self.modules_list.extend(
+            d_layer(start_chs, self.d_chs, spectral_norm=self.spectral_norm))
+        self.modules_list.extend(
+            d_layer(self.d_chs, self.d_chs*2, spectral_norm=self.spectral_norm))
+        self.modules_list.extend(
+            d_layer(self.d_chs*2, self.d_chs*4, spectral_norm=self.spectral_norm))
+        self.modules_list.extend(
+            d_layer(self.d_chs*4, self.d_chs*8, spectral_norm=self.spectral_norm))
+        self.modules_list.extend(
+            d_layer(self.d_chs*8, self.d_chs*8, spectral_norm=self.spectral_norm))
+
         if self.spectral_norm:
             self.modules_list.append(ConvSN2d(self.d_chs*8, self.d_chs*4,
-                               kernel_size=3, stride=1, padding=1))
-            in_features = self.modules_list[-1]
+                                              kernel_size=3, stride=1, padding=1))
+
+            last_channels = self.modules_list[-1].out_channels
+            times = COUNT_IMG_REDUCE
+            in_features = last_channels * \
+                (self.img_shape[1]//2**times) * (self.img_shape[2]//2**times)
             self.before_last = LinearSN(in_features, self.state_dim, bias=True)
+            self.last = LinearSN(self.state_dim, 1, bias=True)
         else:
             self.modules_list.append(nn.Conv2d(self.d_chs*8, self.d_chs*4,
-                               kernel_size=3, stride=1, padding=1))
-            self.before_last = nn.Linear(in_features, self.state_dim, bias=True)
-        
-                            
+                                               kernel_size=3, stride=1, padding=1))
+            last_channels = self.modules_list[-1].out_channels
+            times = COUNT_IMG_REDUCE
+            in_features = last_channels * \
+                (self.img_shape[1]//2**times) * (self.img_shape[2]//2**times)
+            self.before_last = nn.Linear(
+                in_features, self.state_dim, bias=True)
+            self.last = nn.Linear(self.state_dim, 1, bias=True)
+
     def forward(self, x):
         for layer in self.modules_list:
             x = layer(x)
+        x = x.view(x.size(0), -1)  # flatten
+        x = self.activations['lrelu'](x)
         x = self.before_last(x)
         x = self.activations['lrelu'](x)
-        x = x.view(x.size(0), -1) ## flatten
         x = self.last(x)
-        x = self.activations['tanh'](x)
+        x = self.activations['sigmoid'](x)
+        return x
 
-        if spectral_norm:
-            d_out = ConvSN2D(self.d_chs*4, kernel_size=3,
-                             strides=1, padding='same')(d_out)
+class Encoder(BaseModelSRL):
+    """
+    
+    Note: Only Encoder has getStates method.
+    """
+    def __init__(self, img_shape, state_dim,
+                 unet_depth=3,
+                 unet_ch=16,
+                 unet_bn=False,
+                 unet_drop=0.0,
+                 spectral_norm=False):
+        super().__init__()
+        assert img_shape[0] < 10, "Pytorch uses 'channel first' convention."
+        self.state_dim = state_dim
+        self.img_shape = img_shape
+        self.spectral_norm = spectral_norm
+        self.unet_depth = unet_depth
+        self.unet_ch = unet_ch
+        self.unet_drop = unet_drop
+        self.unet_bn = unet_bn
+        self.activations = nn.ModuleDict([
+            ['lrelu', nn.LeakyReLU(negative_slope=0.2)],
+            ['prelu', nn.PReLU()],
+            ['tanh', nn.Tanh()],
+            ['relu', nn.ReLU()],
+            ['sigmoid', nn.Sigmoid()]
+        ])
+        self.unet = UNet(in_ch=self.img_shape[0], include_top=False, depth=self.unet_depth, start_ch=self.unet_ch,
+                         batch_norm=self.unet_bn, spec_norm=self.spectral_norm, dropout=self.unet_drop, up_mode='upconv', out_ch=1)
+        prev_channels = self.unet.out_ch
+
+        self.modules_list = nn.ModuleList([])
+
+        if self.spectral_norm:
+            inter_features = 1 * (self.img_shape[1]//2**2) * (self.img_shape[2]//2**2)
+            self.modules_list.append(ConvSN2d(prev_channels, 1, kernel_size=4, stride=2, padding=1))
+            self.modules_list.append(self.activations['lrelu'])
+            self.modules_list.append(ConvSN2d(1, 1, kernel_size=4, stride=2, padding=1))
+            self.modules_list.append(self.activations['lrelu'])
+            self.before_last = LinearSN(inter_features, 100, bias=True)
+            self.last = LinearSN(100, self.state_dim, bias=True)
         else:
-            d_out = Conv2D(self.d_chs*4, kernel_size=3,
-                           strides=1, padding='same')(d_out)
-        d_out = LeakyReLU(alpha=0.2)(d_out)
-        if self.normalize_D:
-            d_out = InstanceNormalization()(d_out)
+            inter_features = 1 * (self.img_shape[1]//2**2) * (self.img_shape[2]//2**2)
+            self.modules_list.append(nn.Conv2d(prev_channels, 1, kernel_size=4, stride=2, padding=1))
+            self.modules_list.append(self.activations['lrelu'])
+            self.modules_list.append(nn.Conv2d(1, 1, kernel_size=4, stride=2, padding=1))
+            self.modules_list.append(self.activations['lrelu'])
+            self.before_last = nn.Linear(inter_features, 100, bias=True)
+            self.last = nn.Linear(100, self.state_dim, bias=True)
+            # self.top_model = nn.Sequential(OrderDict([
+            #                     ('conv1', nn.Conv2d(prev_channels, 1, kernel_size=4, stride=2, padding=1)),
+            #                     ('relu1', self.activations['relu']),
+            #                     ('conv2', nn.Conv2d(1, 1, kernel_size=4, stride=2, padding=1)),
+            #                     ('relu2', self.activations['relu']),
+            #                     ('dense1', nn.Linear(inter_features, 100, bias=True)),
+            #                     ('relu3', self.activations['relu']),
+            #                     ('dense2', nn.Linear(100, self.state_dim, bias=True)),
+            #                 ]))
 
-        # validity = Dense(1, activation=None)(Flatten()(d_out))
 
-        # validity = Dense(1, activation='sigmoid')(Flatten()(d_out))
-
-        d_out = Flatten()(d_out)
-        # d_out = Dropout(rate=0.3)(d_out)
-
-        # d_out = Dense(self.state_dim//3, activation='relu')(d_out) # Exp_201 and before
-        if spectral_norm:
-            d_out = DenseSN(self.state_dim, activation='relu')(d_out)
-        else:
-            d_out = Dense(self.state_dim, activation='relu')(
-                d_out)  # Exp_202 and after
-
-        if self.loss_name == 'ns_gan':
-            validity = Dense(1, activation='sigmoid')((d_out))
-        elif self.loss_name == 'wgan_gp':
-            validity = Dense(1, activation=None)((d_out))
-        elif self.loss_name == 'ns_gan_sn':
-            validity = DenseSN(1, activation='sigmoid')((d_out))
-        else:
-            raise ValueError("Not implemented error.")
-
+    def forward(self, x):
+        x = self.unet(x)
+        for layer in self.modules_list:
+            x = layer(x)
+        x = x.view(x.size(0), -1)  # flatten
+        x = self.before_last(x)
+        x = self.activations['lrelu'](x)
+        x = self.last(x)
         return x
 
 
@@ -387,5 +444,11 @@ if __name__ == "__main__":
     # a = 128
     # summary(model, (chs, a, a))
 
-    model = Generator(10, img_shape=(3, 128, 128))
-    summary(model, (10,))
+    # model = Generator(img_shape=(3, 128, 128), 10)
+    # summary(model, (10,))
+
+    # model = Discriminator((3, 128, 128), 4)
+    # summary(model, (3, 128, 128))
+
+    model = Encoder((3,128,128), 4)
+    summary(model, (3, 128, 128))

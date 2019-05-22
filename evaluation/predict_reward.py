@@ -15,6 +15,7 @@ from utils import parseDataFolder, detachToNumpy, loadData
 parser = argparse.ArgumentParser(description='Predict Reward from Ground Truth')
 parser.add_argument('--epochs', type=int, default=10,
                     help='number of epochs to train (default: 10)')
+parser.add_argument('--img-shape', type=tuple, default=None, help='image shape (default 224)')
 parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
 parser.add_argument('-bs', '--batch-size', type=int, default=32, help='batch_size (default: 256)')
 parser.add_argument('--training-set-size', type=int, default=-1,
@@ -80,8 +81,8 @@ X_train, X_val = th.from_numpy(X_train), th.from_numpy(X_val)
 mean_val = np.mean(states, axis=0, keepdims=True)
 
 datasets = {'train': TensorDataset(X_train), 'val': TensorDataset(X_val)}
-train_loader = DataLoader(datasets['train'], batch_size=args.batch_size, shuffle=True)
-val_loader = DataLoader(datasets['val'], batch_size=args.batch_size, shuffle=False)
+train_loader = DataLoader(datasets['train'], img_shape=args.img_shape, batch_size=args.batch_size, shuffle=True)
+val_loader = DataLoader(datasets['val'], img_shape=args.img_shape, batch_size=args.batch_size, shuffle=False)
 dataloaders = {'train': train_loader, 'val': val_loader}
 
 start_time = time.time()
