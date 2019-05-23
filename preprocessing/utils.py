@@ -45,7 +45,8 @@ def deNormalize(x, mode="tf"):
     # Reorder channels when we have only one image
     if x.shape[0] == 3 and len(x.shape) == 3:
         # (n_channels, height, width) -> (height, width, n_channels)
-        x = np.transpose(x, (2, 0, 1))
+        x = np.transpose(x, (1, 2, 0))
+        
     assert x.shape[-1] == 3, "Color channel must be at the end of the tensor {}".format(x.shape)
 
     if mode == "tf":

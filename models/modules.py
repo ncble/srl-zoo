@@ -12,8 +12,10 @@ try:
 # consider the relative path to the package
 except ImportError:
     from ..preprocessing.preprocess import N_CHANNELS
-
-from ..utils import printRed
+try:
+    from utils import printRed
+except ImportError:
+    from ..utils import printRed
 
 class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
     def __init__(self, state_dim=2, img_shape=None, action_dim=6, cuda=False, model_type="custom_cnn", losses=None,

@@ -24,7 +24,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='State Representation Learning with PyTorch')
     parser.add_argument('--epochs', type=int, default=30, metavar='N',
                         help='number of epochs to train (default: 30)')
-    parser.add_argument('--img-shape', type=tuple, default=None,
+    parser.add_argument('--img-shape', type=str, default=None,
                         help='image shape (default None, i.e. (3,224,224))')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
@@ -34,6 +34,8 @@ if __name__ == '__main__':
     parser.add_argument('--training-set-size', type=int, default=-1,
                         help='Limit size (number of samples) of the training set (default: -1)')
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.005, help='learning rate (default: 0.005)')
+    parser.add_argument('-lr_G', '--learning-rate-G', type=float, default=None, help='learning rate GAN: Generator (default: None)')
+    parser.add_argument('-lr_D', '--learning-rate-D', type=float, default=None, help='learning rate GAN: Discriminator (default: None)')
     parser.add_argument('--l1-reg', type=float, default=0.0, help='L1 regularization coeff (default: 0.0)')
     parser.add_argument('--l2-reg', type=float, default=0.0, help='L2 regularization coeff (default: 0.0)')
     parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -172,9 +174,13 @@ if __name__ == '__main__':
 
     print('Learning a state representation ... ')
 
-    srl = SRL4robotics(args.state_dim, img_shape=args.img_shape, model_type=args.model_type, inverse_model_type=args.inverse_model_type,
+    if args.img_shape is None:
+        img_shape = (3,224,224)
+    else:
+        img_shape = tuple(map(int, args.img_shape[1:-1].split(",")))
+    srl = SRL4robotics(args.state_dim, img_shape=img_shape, model_type=args.model_type, inverse_model_type=args.inverse_model_type,
                        seed=args.seed,
-                       log_folder=args.log_folder, learning_rate=args.learning_rate,
+                       log_folder=args.log_folder, learning_rate=args.learning_rate, learning_rate_gan=(args.learning_rate_D, args.learning_rate_G),
                        l1_reg=args.l1_reg, l2_reg=args.l2_reg, cuda=args.cuda, multi_view=args.multi_view,
                        losses=losses, losses_weights_dict=losses_weights_dict, n_actions=n_actions, beta=args.beta,
                        split_dimensions=split_dimensions, path_to_dae=args.path_to_dae,

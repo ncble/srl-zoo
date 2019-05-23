@@ -113,6 +113,7 @@ class DataLoader(object):
         # apply occlusion for training a DAE
         self.apply_occlusion = apply_occlusion
         self.occlusion_percentage = occlusion_percentage
+        self.img_shape = img_shape
         self.startProcess()
 
     @staticmethod
@@ -161,24 +162,23 @@ class DataLoader(object):
                         images = self.images_path[self.minibatchlist[minibatch_idx]]
 
                     if self.n_workers <= 1:
-                        batch = [self._makeBatchElement(image_path, self.multi_view, self.use_triplets)
+                        batch = [self._makeBatchElement(image_path, self.multi_view, self.use_triplets, img_shape=self.img_shape)
                                  for image_path in images]
                         if self.apply_occlusion:
                             batch_noisy = [self._makeBatchElement(image_path, self.multi_view, self.use_triplets,
                                                                   apply_occlusion=self.apply_occlusion,
-                                                                  occlusion_percentage=self.occlusion_percentage)
+                                                                  occlusion_percentage=self.occlusion_percentage,
+                                                                  img_shape=self.img_shape)
                                            for image_path in images]
 
                     else:
-                        batch = parallel(
-                            delayed(self._makeBatchElement)(
-                                image_path, self.multi_view, self.use_triplets)
-                            for image_path in images)
+                        batch = parallel(delayed(self._makeBatchElement)(image_path, self.multi_view, self.use_triplets, img_shape=self.img_shape) for image_path in images)
                         if self.apply_occlusion:
                             batch_noisy = parallel(
                                 delayed(self._makeBatchElement)(image_path, self.multi_view, self.use_triplets,
                                                                 apply_occlusion=self.apply_occlusion,
-                                                                occlusion_percentage=self.occlusion_percentage)
+                                                                occlusion_percentage=self.occlusion_percentage, 
+                                                                img_shape=self.img_shape)
                                 for image_path in images)
 
                     batch = th.cat(batch, dim=0)
@@ -210,7 +210,7 @@ class DataLoader(object):
 
     @classmethod
     def _makeBatchElement(cls, image_path, multi_view=False, use_triplets=False, apply_occlusion=False,
-                          occlusion_percentage=None):
+                          occlusion_percentage=None, img_shape=None):
         """
         :param image_path: (str) path to an image (without the 'data/' prefix)
         :param multi_view: (bool)
@@ -348,10 +348,10 @@ class SupervisedDataLoader(DataLoader):
 
                     if self.n_workers <= 1:
                         batch = [self._makeBatchElement(
-                            image_path) for image_path in images]
+                            image_path, img_shape=self.img_shape) for image_path in images]
                     else:
                         batch = parallel(delayed(self._makeBatchElement)(
-                            image_path) for image_path in images)
+                            image_path, img_shape=self.img_shape) for image_path in images)
 
                     batch = th.cat(batch, dim=0)
 
