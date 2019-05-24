@@ -650,8 +650,8 @@ class SRL4robotics(BaseLearner):
                                                                                 val_loss))
                 print("{:.2f}s/epoch".format((time.time() - start_time) / (epoch + 1)))
                 if DISPLAY_PLOTS:
+                    self.model.eval()
                     with torch.no_grad():
-                        self.model.eval()
                         # Optionally plot the current state space
                         plotRepresentation(self.predStatesWithDataLoader(test_data_loader), rewards,
                                            add_colorbar=epoch == 0,

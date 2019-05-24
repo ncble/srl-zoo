@@ -173,3 +173,9 @@ class Discriminator(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+if __name__ == "__main__":
+    print("Start")
+
+    img_shape = (3,128,128)
+    model = SRLConvolutionalNetwork(state_dim=2, cuda=False)
+    A = summary(model, img_shape)

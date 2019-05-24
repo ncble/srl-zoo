@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from .models import *
-
+from torchsummary import summary
 
 class DenseVAE(BaseModelVAE):
     """
@@ -47,13 +47,15 @@ class CNNVAE(BaseModelVAE):
     :param state_dim: (int)
     """
 
-    def __init__(self, state_dim=3):
+    def __init__(self, state_dim=3, img_shape=(3,224,224)):
         super(CNNVAE, self).__init__()
-        self.encoder_fc1 = nn.Linear(6 * 6 * 64, state_dim)
-        self.encoder_fc2 = nn.Linear(6 * 6 * 64, state_dim)
+        outshape = summary(self.encoder_conv, img_shape, show=False) # [-1, channels, high, width]
+        self.img_high, self.img_width = outshape[-2:]
+        self.encoder_fc1 = nn.Linear(self.img_high * self.img_width * 64, state_dim)
+        self.encoder_fc2 = nn.Linear(self.img_high * self.img_width * 64, state_dim)
 
         self.decoder_fc = nn.Sequential(
-            nn.Linear(state_dim, 6 * 6 * 64)
+            nn.Linear(state_dim, self.img_high * self.img_width * 64)
         )
 
     def encode(self, x):
@@ -71,5 +73,11 @@ class CNNVAE(BaseModelVAE):
         :return: (th.Tensor)
         """
         z = self.decoder_fc(z)
-        z = z.view(z.size(0), 64, 6, 6)
+        z = z.view(z.size(0), 64, self.img_high, self.img_width)
         return self.decoder_conv(z)
+if __name__ == "__main__":
+    print("Start")
+
+    img_shape = (3,128,128)
+    model = CNNVAE(state_dim=2, img_shape=img_shape)
+    A = summary(model, img_shape)

@@ -11,7 +11,7 @@ try:
     from preprocessing.preprocess import getNChannels
 except ImportError:
     from ..preprocessing.preprocess import getNChannels
-
+from torchsummary import summary
 
 class BaseModelSRL(nn.Module):
     """
@@ -183,10 +183,11 @@ class CustomCNN(BaseModelSRL):
     :param state_dim: (int)
     """
 
-    def __init__(self, state_dim=2):
+    def __init__(self, state_dim=2, img_shape=(3,224,224)):
         super(CustomCNN, self).__init__()
         # Inspired by ResNet:
         # conv3x3 followed by BatchNorm2d
+        
         self.conv_layers = nn.Sequential(
             # 224x224x3 -> 112x112x64
             nn.Conv2d(getNChannels(), 64, kernel_size=7, stride=2, padding=3, bias=False),
@@ -204,8 +205,10 @@ class CustomCNN(BaseModelSRL):
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2)  # 6x6x64
         )
-
-        self.fc = nn.Linear(6 * 6 * 64, state_dim)
+        
+        outshape = summary(self.conv_layers, img_shape, show=False) # [-1, channels, high, width]
+        self.img_high, self.img_width = outshape[-2:]
+        self.fc = nn.Linear(self.img_high * self.img_width * 64, state_dim)
 
     def forward(self, x):
         x = self.conv_layers(x)
@@ -235,3 +238,10 @@ def encodeOneHot(tensor, n_dim):
     """
     encoded_tensor = th.Tensor(tensor.shape[0], n_dim).zero_().to(tensor.device)
     return encoded_tensor.scatter_(1, tensor.data, 1.)
+if __name__ == "__main__":
+    print("Start")
+
+    img_shape = (3,128,128)
+    model = CustomCNN(state_dim=2, img_shape=img_shape)
+    A = summary(model, img_shape)
+    

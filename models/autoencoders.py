@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from .models import *
-
+from torchsummary import summary
 
 class LinearAutoEncoder(BaseModelAutoEncoder):
     """
@@ -88,15 +88,17 @@ class CNNAutoEncoder(BaseModelAutoEncoder):
     :param state_dim: (int)
     """
 
-    def __init__(self, state_dim=3):
+    def __init__(self, state_dim=3, img_shape=(3,224,224)):
         super(CNNAutoEncoder, self).__init__()
-
+        outshape = summary(self.encoder_conv, img_shape, show=False) # [-1, channels, high, width]
+        self.img_high, self.img_width = outshape[-2:]
+        
         self.encoder_fc = nn.Sequential(
-            nn.Linear(6 * 6 * 64, state_dim)
+            nn.Linear(self.img_high * self.img_width * 64, state_dim)
         )
 
         self.decoder_fc = nn.Sequential(
-            nn.Linear(state_dim, 6 * 6 * 64)
+            nn.Linear(state_dim, self.img_high * self.img_width * 64)
         )
 
     def encode(self, x):
@@ -114,5 +116,13 @@ class CNNAutoEncoder(BaseModelAutoEncoder):
         :return: (th.Tensor)
         """
         decoded = self.decoder_fc(x)
-        decoded = decoded.view(x.size(0), 64, 6, 6)
+        decoded = decoded.view(x.size(0), 64, self.img_high, self.img_width)
         return self.decoder_conv(decoded)
+
+if __name__ == "__main__":
+    print("Start")
+    from torchsummary import summary
+    img_shape = (3,128,128)
+    model = CNNAutoEncoder(state_dim=2, img_shape=img_shape)
+    A = summary(model, img_shape)
+    # import ipdb; ipdb.set_trace()

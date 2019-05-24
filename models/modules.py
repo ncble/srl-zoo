@@ -55,12 +55,12 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         # Architecture
         if model_type == "custom_cnn":
             if "autoencoder" in losses or "dae" in losses:
-                self.model = CNNAutoEncoder(state_dim)
+                self.model = CNNAutoEncoder(state_dim, img_shape=self.img_shape)
             elif "vae" in losses:
-                self.model = CNNVAE(state_dim)
+                self.model = CNNVAE(state_dim, img_shape=self.img_shape)
             else:
                 # for losses not depending on specific architecture (supervised, inv, fwd..)
-                self.model = CustomCNN(state_dim)
+                self.model = CustomCNN(state_dim, img_shape=self.img_shape)
 
         elif model_type == "mlp":
             if "autoencoder" in losses or "dae" in losses:
