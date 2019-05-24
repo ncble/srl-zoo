@@ -47,8 +47,7 @@ def preprocessImage(image, img_reshape=None, convert_to_rgb=True, apply_occlusio
     """
     # Resize
     if img_reshape is not None:
-        assert isinstance(
-            img_reshape, tuple), "'img_reshape' should be a tuple like: (3,128,128)"
+        assert isinstance(img_reshape, tuple), "'img_reshape' should be a tuple like: (3,128,128)"
         assert img_reshape[0] < 10, "'img_reshape' should be a tuple like: (3,128,128)"
         im = cv2.resize(image, img_reshape[1:], interpolation=cv2.INTER_AREA)
     else:
@@ -58,16 +57,14 @@ def preprocessImage(image, img_reshape=None, convert_to_rgb=True, apply_occlusio
     if convert_to_rgb:
         im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
     # Normalize
-    im = preprocessInput(im.astype(np.float32), mode="tf")
+    im = preprocessInput(im.astype(np.float32))
 
     img_high, img_width = img_reshape[1:]
     if apply_occlusion:
         h_1 = np.random.randint(img_high)
-        h_1, h_2 = sample_coordinates(
-            h_1, img_high, percentage=occlusion_percentage)
+        h_1, h_2 = sample_coordinates(h_1, img_high, percentage=occlusion_percentage)
         w_1 = np.random.randint(img_width)
-        w_1, w_2 = sample_coordinates(
-            w_1, img_width, percentage=occlusion_percentage)
+        w_1, w_2 = sample_coordinates(w_1, img_width, percentage=occlusion_percentage)
         noisy_img = im
         # This mask is set by applying zero values to corresponding pixels.
         noisy_img[h_1:h_2, w_1:w_2, :] = 0.
@@ -146,11 +143,9 @@ class DataLoader(object):
                 start = False
 
                 if self.shuffle:
-                    indices = np.random.permutation(
-                        self.n_minibatches).astype(np.int64)
+                    indices = np.random.permutation(self.n_minibatches).astype(np.int64)
                 else:
-                    indices = np.arange(
-                        len(self.minibatchlist), dtype=np.int64)
+                    indices = np.arange(len(self.minibatchlist), dtype=np.int64)
 
                 for minibatch_idx in indices:
                     batch_noisy, batch_obs_noisy, batch_next_obs_noisy = None, None, None
@@ -186,11 +181,10 @@ class DataLoader(object):
                         batch_noisy = th.cat(batch_noisy, dim=0)
 
                     if self.shuffle:
-                        batch_obs, batch_next_obs = batch[:len(
-                            images) // 2], batch[len(images) // 2:]
+                        batch_obs, batch_next_obs = batch[:len(images) // 2], batch[len(images) // 2:]
                         if batch_noisy is not None:
                             batch_obs_noisy, batch_next_obs_noisy = batch_noisy[:len(images) // 2], \
-                                batch_noisy[len(images) // 2:]
+                                                                    batch_noisy[len(images) // 2:]
                         self.queue.put((minibatch_idx, batch_obs, batch_next_obs,
                                         batch_obs_noisy, batch_next_obs_noisy))
                     else:
@@ -227,8 +221,7 @@ class DataLoader(object):
             for i in range(2):
                 im = cv2.imread("{}_{}.jpg".format(image_path, i + 1))
                 if im is None:
-                    raise ValueError(
-                        "tried to load {}_{}.jpg, but it was not found".format(image_path, i + 1))
+                    raise ValueError("tried to load {}_{}.jpg, but it was not found".format(image_path, i + 1))
                 images.append(preprocessImage(im, img_reshape=img_shape, apply_occlusion=apply_occlusion,
                                               occlusion_percentage=occlusion_percentage))
             ####################
@@ -238,27 +231,23 @@ class DataLoader(object):
                 extra_chars = '_1.jpg'
 
                 # getting path for all files of same record episode, e.g path_to_data/record_001/frame[0-9]{6}*
-                digits_path = glob.glob(
-                    image_path[:-6] + '[0-9]*' + extra_chars)
+                digits_path = glob.glob(image_path[:-6] + '[0-9]*' + extra_chars)
 
                 # getting the current & all frames' timesteps
                 current = int(image_path[-6:])
                 # For all others extract last 6 digits (timestep) after removing the extra chars
-                all_frame_steps = [int(k[:-len(extra_chars)][-6:])
-                                   for k in digits_path]
+                all_frame_steps = [int(k[:-len(extra_chars)][-6:]) for k in digits_path]
                 # removing current positive timestep from the list
                 all_frame_steps.remove(current)
 
                 # negative timestep by random sampling
                 length_set_steps = len(all_frame_steps)
-                negative = all_frame_steps[random.randint(
-                    0, length_set_steps - 1)]
+                negative = all_frame_steps[random.randint(0, length_set_steps - 1)]
                 negative_path = '{}{:06d}'.format(image_path[:-6], negative)
 
                 im3 = cv2.imread(negative_path + "_1.jpg")
                 if im3 is None:
-                    raise ValueError(
-                        "tried to load {}_{}.jpg, but it was not found".format(negative_path, 1))
+                    raise ValueError("tried to load {}_{}.jpg, but it was not found".format(negative_path, 1))
                 im3 = preprocessImage(im3, img_reshape=img_shape)
                 # stacking along channels
                 images.append(im3)
@@ -267,11 +256,9 @@ class DataLoader(object):
         else:
             im = cv2.imread("{}.jpg".format(image_path))
             if im is None:
-                raise ValueError(
-                    "tried to load {}.jpg, but it was not found".format(image_path))
+                raise ValueError("tried to load {}.jpg, but it was not found".format(image_path))
 
-            im = preprocessImage(im, img_reshape=img_shape, apply_occlusion=apply_occlusion,
-                                 occlusion_percentage=occlusion_percentage)
+            im = preprocessImage(im, img_reshape=img_shape, apply_occlusion=apply_occlusion, occlusion_percentage=occlusion_percentage)
 
         # Channel first (for pytorch convolutions) + one dim for the batch
         # th.tensor creates a copy
@@ -320,8 +307,7 @@ class SupervisedDataLoader(DataLoader):
     def __init__(self, x_indices, y_values, images_path, batch_size, img_shape=None, n_workers=1, no_targets=False,
                  shuffle=False, infinite_loop=True, max_queue_len=4):
         # Create minibatch list
-        minibatchlist, targets = self.createMinibatchList(
-            x_indices, y_values, batch_size)
+        minibatchlist, targets = self.createMinibatchList(x_indices, y_values, batch_size)
 
         # Whether to yield targets together with output
         # (not needed when plotting or predicting states)
@@ -337,21 +323,17 @@ class SupervisedDataLoader(DataLoader):
             while start or self.infinite_loop:
                 start = False
                 if self.shuffle:
-                    indices = np.random.permutation(
-                        self.n_minibatches).astype(np.int64)
+                    indices = np.random.permutation(self.n_minibatches).astype(np.int64)
                 else:
-                    indices = np.arange(
-                        len(self.minibatchlist), dtype=np.int64)
+                    indices = np.arange(len(self.minibatchlist), dtype=np.int64)
 
                 for minibatch_idx in indices:
                     images = self.images_path[self.minibatchlist[minibatch_idx]]
 
                     if self.n_workers <= 1:
-                        batch = [self._makeBatchElement(
-                            image_path, img_shape=self.img_shape) for image_path in images]
+                        batch = [self._makeBatchElement(image_path, img_shape=self.img_shape) for image_path in images]
                     else:
-                        batch = parallel(delayed(self._makeBatchElement)(
-                            image_path, img_shape=self.img_shape) for image_path in images)
+                        batch = parallel(delayed(self._makeBatchElement)(image_path, img_shape=self.img_shape) for image_path in images)
 
                     batch = th.cat(batch, dim=0)
 
@@ -359,8 +341,7 @@ class SupervisedDataLoader(DataLoader):
                         self.queue.put(batch)
                     else:
                         # th.tensor creates a copy
-                        self.queue.put(
-                            (batch, th.tensor(self.targets[minibatch_idx])))
+                        self.queue.put((batch, th.tensor(self.targets[minibatch_idx])))
 
                     # Free memory
                     del batch

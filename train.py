@@ -175,7 +175,7 @@ if __name__ == '__main__':
     print('Learning a state representation ... ')
 
     if args.img_shape is None:
-        img_shape = (3,224,224)
+        img_shape = None #(3,224,224)
     else:
         img_shape = tuple(map(int, args.img_shape[1:-1].split(",")))
     srl = SRL4robotics(args.state_dim, img_shape=img_shape, model_type=args.model_type, inverse_model_type=args.inverse_model_type,

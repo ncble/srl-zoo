@@ -81,8 +81,12 @@ X_train, X_val = th.from_numpy(X_train), th.from_numpy(X_val)
 mean_val = np.mean(states, axis=0, keepdims=True)
 
 datasets = {'train': TensorDataset(X_train), 'val': TensorDataset(X_val)}
-train_loader = DataLoader(datasets['train'], img_shape=tuple(map(int, args.img_shape[1:-1].split(","))), batch_size=args.batch_size, shuffle=True)
-val_loader = DataLoader(datasets['val'], img_shape=tuple(map(int, args.img_shape[1:-1].split(","))), batch_size=args.batch_size, shuffle=False)
+if args.img_shape is None:
+    img_shape = None #(3,224,224)
+else:
+    img_shape = tuple(map(int, args.img_shape[1:-1].split(",")))
+train_loader = DataLoader(datasets['train'], img_shape=img_shape, batch_size=args.batch_size, shuffle=True)
+val_loader = DataLoader(datasets['val'], img_shape=img_shape, batch_size=args.batch_size, shuffle=False)
 dataloaders = {'train': train_loader, 'val': val_loader}
 
 start_time = time.time()
