@@ -377,6 +377,6 @@ def tripletLoss(states, p_states, n_states, weight, loss_manager, alpha=0.2):
 
 
 def ganNonSaturateLoss(img_rating, label, weight, loss_manager, name="non_saturate_loss"):
-    binary_crossentropy = torch.nn.BCELoss(img_rating, label)
+    binary_crossentropy = th.nn.BCELoss()(img_rating, label)
     loss_manager.addToLosses(name, weight, binary_crossentropy)
     return weight * binary_crossentropy

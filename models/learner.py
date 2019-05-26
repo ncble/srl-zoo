@@ -10,7 +10,7 @@ from pprint import pprint
 
 import numpy as np
 import torch
-from tqdm import tqdm
+# from tqdm import tqdm
 
 from losses.losses import LossManager, autoEncoderLoss, roboticPriorsLoss, tripletLoss, rewardModelLoss, \
     rewardPriorLoss, forwardModelLoss, inverseModelLoss, episodePriorLoss, l1Loss, l2Loss, kullbackLeiblerLoss, \
@@ -26,6 +26,7 @@ from .priors import Discriminator as PriorDiscriminator
 
 MAX_BATCH_SIZE_GPU = 256  # For plotting, max batch_size before having memory issues
 EPOCH_FLAG = 1  # Plot every 1 epoch
+ITER_FLAT = 10 # Print loss every 10 iterations
 N_WORKERS = 4
 
 # The following variables are defined using arguments of the main script train.py
@@ -64,7 +65,7 @@ class BaseLearner(object):
             torch.cuda.manual_seed(seed)
 
         self.device = torch.device(
-            "cuda" if torch.cuda.is_available() and cuda else "cpu")
+            "cuda:0" if torch.cuda.is_available() and cuda else "cpu")
 
     def _predFn(self, observations):
         """
@@ -278,7 +279,7 @@ class SRL4robotics(BaseLearner):
 
         return srl_model, exp_config
 
-    def learn(self, images_path, actions, rewards, episode_starts):
+    def learn(self, images_path, actions, rewards, episode_starts, figpath=None):
         """
         Learn a state representation
         :param images_path: (numpy 1D array)
@@ -369,7 +370,7 @@ class SRL4robotics(BaseLearner):
 
         best_error = np.inf
         best_model_path = "{}/srl_model.pth".format(self.log_folder)
-        start_time = time.time()
+        
 
         # Random features, we don't need to train a model
         if len(self.losses) == 1 and self.losses[0] == 'random':
@@ -379,14 +380,15 @@ class SRL4robotics(BaseLearner):
             torch.save(self.model.state_dict(), best_model_path)
 
         for epoch in range(N_EPOCHS):
+            start_time = time.time()
             # In each epoch, we do a full pass over the training data:
             epoch_loss, epoch_batches = 0, 0
             val_loss = 0
             if self.model_type == 'gan':
                 # GAN's training requires multi-optimizers, thus multiple loss_manger/epoch_loss/val_loss, etc.
-                epoch_loss_D, epoch_batches_D, val_loss_G = 0, 0, 0
+                epoch_loss_D, epoch_batches_D, val_loss_D = 0, 0, 0
                 epoch_loss_G, epoch_batches_G, val_loss_G = 0, 0, 0
-            pbar = tqdm(total=len(minibatchlist))
+            
 
             for minibatch_num, (minibatch_idx, obs, next_obs, noisy_obs, next_noisy_obs) in enumerate(data_loader):
 
@@ -407,7 +409,7 @@ class SRL4robotics(BaseLearner):
                     self.optimizer_E.zero_grad()
                     loss_manager.resetLosses()
                     loss_manager_D.resetLosses()
-                    loss_history_G.resetLosses()
+                    loss_manager_G.resetLosses()
                 else:
                     self.optimizer.zero_grad()
                     loss_manager.resetLosses()
@@ -448,8 +450,7 @@ class SRL4robotics(BaseLearner):
                             self.denoiser(obs), self.denoiser(next_obs)
 
                         (states_denoiser_predicted, decoded_obs_denoiser_predicted) = self.denoiser(decoded_obs)
-                        (next_states_denoiser_predicted,
-                         decoded_next_obs_denoiser_predicted) = self.denoiser(next_decoded_obs)
+                        (next_states_denoiser_predicted, decoded_next_obs_denoiser_predicted) = self.denoiser(next_decoded_obs)
                 else:
                     states, next_states = self.model(obs), self.model(next_obs)
 
@@ -534,7 +535,7 @@ class SRL4robotics(BaseLearner):
 
                 if self.model_type == 'gan':
                     label_valid = torch.ones((obs.size(0), 1)).to(self.device)
-                    label_fake = torch.zeros((obs.size(0), 1)).to(device)
+                    label_fake = torch.zeros((obs.size(0), 1)).to(self.device)
 
                     # === Train the Discriminator first ===
                     sample_state = torch.randn((obs.size(0), self.state_dim),
@@ -579,7 +580,7 @@ class SRL4robotics(BaseLearner):
                         epoch_loss_G += g_loss.item()
                         epoch_batches_G += 1
                     
-
+                    # import ipdb; ipdb.set_trace()
                     train_loss_D = epoch_loss_D / float(epoch_batches_D)
                     train_loss_G = epoch_loss_G / float(epoch_batches_G)
                     val_loss_D /= float(n_val_batches) # [TODO wrong !!!]
@@ -609,14 +610,20 @@ class SRL4robotics(BaseLearner):
                     # so optimizer.step() is not called
                 else:
                     loss.backward()
-                    self.optimizer.step()
+                    if self.model_type == 'gan':
+                        self.optimizer_E.step()
+                    else:
+                        self.optimizer.step()
                     epoch_loss += loss.item()
                     epoch_batches += 1
-                pbar.update(1)
-            pbar.close()
-
-            train_loss = epoch_loss / float(epoch_batches)
-            val_loss /= float(n_val_batches)
+                # pbar.update(1)
+                train_loss = epoch_loss / float(epoch_batches)
+                val_loss /= float(n_val_batches)
+                if minibatch_num % ITER_FLAT == 0 or (minibatch_num == len(minibatchlist)-1):
+                    print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} val_loss: {:.4f} | (elapsed time: {:.2f}s)".format(epoch + 1, N_EPOCHS, (minibatch_num+1)/len(minibatchlist), train_loss,
+                                                                                                                    val_loss, time.time() - start_time), end="")
+            print()
+            
             # Even if loss_history is modified by LossManager
             # we make it explicit
             def update_loss_history(loss_manager, train_loss, val_loss, epoch_batches, epoch):
@@ -646,21 +653,20 @@ class SRL4robotics(BaseLearner):
 
             # Then we print the results for this epoch:
             if (epoch + 1) % EPOCH_FLAG == 0:
-                print("Epoch {:3}/{}, train_loss:{:.4f} val_loss:{:.4f}".format(epoch + 1, N_EPOCHS, train_loss,
-                                                                                val_loss))
-                print("{:.2f}s/epoch".format((time.time() - start_time) / (epoch + 1)))
                 if DISPLAY_PLOTS:
                     self.model.eval()
                     with torch.no_grad():
                         # Optionally plot the current state space
-                        plotRepresentation(self.predStatesWithDataLoader(test_data_loader), rewards,
-                                           add_colorbar=epoch == 0,
-                                           name="Learned State Representation (Training Data)")
+                        # plotRepresentation(self.predStatesWithDataLoader(test_data_loader), rewards,
+                        #                    add_colorbar=epoch == 0,
+                        #                    name="Learned State Representation (Training Data)",
+                        #                    path=os.path.join(figpath, "{}.png".format(minibatch_num+epoch*len(minibatchlist)))) ## [TODO]
 
                         if self.use_autoencoder or self.use_vae or self.use_dae:
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB
-                                plotImage(deNormalize(detachToNumpy(obs[0])), "Input Image (Train)")
+                                plotImage(deNormalize(detachToNumpy(obs[0])), "Input Image (Train)", mode='cv2', save2path=os.path.join(
+                                    figpath, "input_{}.png".format(minibatch_num+epoch*len(minibatchlist))))
                                 if self.use_dae:
                                     plotImage(deNormalize(detachToNumpy(noisy_obs[0])), "Noisy Input Image (Train)")
                                 if self.perceptual_similarity_loss:
@@ -668,7 +674,8 @@ class SRL4robotics(BaseLearner):
                                               "Reconstructed Image DAE")
                                     plotImage(deNormalize(detachToNumpy(decoded_obs_denoiser_predicted[0])),
                                               "Reconstructed Image predicted DAE")
-                                plotImage(deNormalize(detachToNumpy(decoded_obs[0])), "Reconstructed Image")
+                                plotImage(deNormalize(detachToNumpy(decoded_obs[0])), "Reconstructed Image", mode='cv2', save2path=os.path.join(
+                                    figpath, "recon_{}.png".format(minibatch_num+epoch*len(minibatchlist))))
 
                             elif obs[0].shape[0] % 3 == 0:  # Multi-RGB
                                 for k in range(obs[0].shape[0] // 3):
@@ -688,7 +695,8 @@ class SRL4robotics(BaseLearner):
                                               "Reconstructed Image {}".format(k + 1))
 
         if DISPLAY_PLOTS:
-            plt.close("Learned State Representation (Training Data)")
+            # plt.close("Learned State Representation (Training Data)")
+            plt.close("all")
 
         # Load best model before predicting states
         self.model.load_state_dict(torch.load(best_model_path))

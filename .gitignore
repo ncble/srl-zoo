@@ -1,5 +1,6 @@
 # Custom
 data/
+figures/
 .idea/
 *.npy
 *.npz

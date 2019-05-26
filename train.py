@@ -7,7 +7,7 @@ from __future__ import print_function, division, absolute_import
 
 import argparse
 from collections import OrderedDict
-
+import os
 import numpy as np
 import torch as th
 
@@ -34,15 +34,15 @@ if __name__ == '__main__':
     parser.add_argument('--training-set-size', type=int, default=-1,
                         help='Limit size (number of samples) of the training set (default: -1)')
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.005, help='learning rate (default: 0.005)')
-    parser.add_argument('-lr_G', '--learning-rate-G', type=float, default=None, help='learning rate GAN: Generator (default: None)')
-    parser.add_argument('-lr_D', '--learning-rate-D', type=float, default=None, help='learning rate GAN: Discriminator (default: None)')
+    parser.add_argument('-lr_G', '--learning-rate-G', type=float, default=1e-5, help='learning rate GAN: Generator (default: None)')
+    parser.add_argument('-lr_D', '--learning-rate-D', type=float, default=1e-5, help='learning rate GAN: Discriminator (default: None)')
     parser.add_argument('--l1-reg', type=float, default=0.0, help='L1 regularization coeff (default: 0.0)')
     parser.add_argument('--l2-reg', type=float, default=0.0, help='L2 regularization coeff (default: 0.0)')
     parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--no-display-plots', action='store_true', default=False,
                         help='disables live plots of the representation learned')
     parser.add_argument('--model-type', type=str, default="custom_cnn",
-                        choices=['custom_cnn', 'resnet', 'mlp', 'linear'],
+                        choices=['custom_cnn', 'resnet', 'mlp', 'linear', 'gan'],
                         help='Model architecture (default: "custom_cnn")')
     parser.add_argument('--inverse-model-type', type=str, default="linear",
                         choices=['mlp', 'linear'],
@@ -69,6 +69,8 @@ if __name__ == '__main__':
                         help='state dimension of the pre-trained dae (default: 200)')
     parser.add_argument('--occlusion-percentage', type=float, default=0.5,
                         help='Max percentage of input occlusion for masks when using DAE')
+    parser.add_argument('--figpath', type=str, default=None,
+                        help="Save figure the 'figpath'.")
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and th.cuda.is_available()
@@ -195,8 +197,8 @@ if __name__ == '__main__':
 
     # Save configs in log folder
     saveConfig(exp_config, print_config=True)
-
-    loss_history, learned_states, pairs_name_weights = srl.learn(images_path, actions, rewards, episode_starts)
+    os.makedirs(args.figpath, exist_ok=True)
+    loss_history, learned_states, pairs_name_weights = srl.learn(images_path, actions, rewards, episode_starts, figpath=args.figpath)
 
     # Update config with weights for each losses
     exp_config['losses_weights'] = pairs_name_weights

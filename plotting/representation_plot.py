@@ -13,10 +13,10 @@ from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 
 from utils import parseDataFolder, getInputBuiltin, loadData
-
+import cv2
 # Init seaborn
 sns.set()
-INTERACTIVE_PLOT = True
+INTERACTIVE_PLOT = False
 TITLE_MAX_LENGTH = 50
 
 
@@ -113,23 +113,30 @@ def plot3dRepresentation(states, rewards, name="Learned State Representation",
     pauseOrClose(fig)
 
 
-def plotImage(image, name='Observation Sample'):
+def plotImage(image, name='Observation Sample', mode='matplotlib', save2path=None):
     """
     Display an image
     :param image: (np.ndarray) (with values in [0, 1])
     :param name: (str)
     """
     # Reorder channels
+    assert mode in ['matplotlib', 'cv2']
     if image.shape[0] == 3 and len(image.shape) == 3:
         # (n_channels, height, width) -> (height, width, n_channels)
         image = np.transpose(image, (1, 2, 0))
-    updateDisplayMode()
-    fig = plt.figure(name)
-    plt.imshow(image, interpolation='nearest')
-    # plt.gca().invert_yaxis()
-    plt.xticks([])
-    plt.yticks([])
-    pauseOrClose(fig)
+    if mode == 'matplotlib':
+        updateDisplayMode()
+        fig = plt.figure(name)
+        plt.imshow(image, interpolation='nearest')
+        # plt.gca().invert_yaxis()
+        plt.xticks([])
+        plt.yticks([])
+        pauseOrClose(fig)
+    elif mode == 'cv2':
+        if save2path is not None:
+            image = 255*image[..., ::-1]
+            cv2.imwrite(save2path, image.astype(int))
+
 
 
 def colorPerEpisode(episode_starts):
