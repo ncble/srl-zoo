@@ -23,10 +23,10 @@ from preprocessing.utils import deNormalize
 from utils import printRed, detachToNumpy, printYellow
 from .modules import SRLModules, SRLModulesSplit
 from .priors import Discriminator as PriorDiscriminator
-
+from torchvision.utils import make_grid
 MAX_BATCH_SIZE_GPU = 256  # For plotting, max batch_size before having memory issues
 EPOCH_FLAG = 1  # Plot every 1 epoch
-ITER_FLAT = 10 # Print loss every 10 iterations
+ITER_FLAG = 10 # Print loss every 10 iterations
 N_WORKERS = 4
 
 # The following variables are defined using arguments of the main script train.py
@@ -600,26 +600,25 @@ class SRL4robotics(BaseLearner):
                 
                 loss_manager.updateLossHistory()
                 loss = loss_manager.computeTotalLoss()
-
-                # We have to call backward in both train/val
-                # to avoid memory error
                 
                 if validation_mode:
                     val_loss += loss.item()
                     # We do not optimize on validation data
                     # so optimizer.step() is not called
                 else:
-                    loss.backward()
+                    loss.backward()    
                     if self.model_type == 'gan':
                         self.optimizer_E.step()
                     else:
                         self.optimizer.step()
                     epoch_loss += loss.item()
                     epoch_batches += 1
-                # pbar.update(1)
+
+                if epoch_batches == 0:
+                    import ipdb; ipdb.set_trace()
                 train_loss = epoch_loss / float(epoch_batches)
                 val_loss /= float(n_val_batches)
-                if minibatch_num % ITER_FLAT == 0 or (minibatch_num == len(minibatchlist)-1):
+                if minibatch_num % ITER_FLAG == 0 or (minibatch_num == len(minibatchlist)-1):
                     print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} val_loss: {:.4f} | (elapsed time: {:.2f}s)".format(epoch + 1, N_EPOCHS, (minibatch_num+1)/len(minibatchlist), train_loss,
                                                                                                                     val_loss, time.time() - start_time), end="")
             print()
@@ -665,8 +664,13 @@ class SRL4robotics(BaseLearner):
                         if self.use_autoencoder or self.use_vae or self.use_dae:
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB
-                                plotImage(deNormalize(detachToNumpy(obs[0])), "Input Image (Train)", mode='cv2', save2path=os.path.join(
-                                    figpath, "input_{}.png".format(minibatch_num+epoch*len(minibatchlist))))
+                                images = make_grid([obs[0], decoded_obs[0], obs[1], decoded_obs[1]], nrow=2) # , normalize=True, range=(0,1)
+                                plotImage(deNormalize(detachToNumpy(images)), mode='cv2', 
+                                                save2path=os.path.join(figpath, "recons_{}.png".format(minibatch_num+epoch*len(minibatchlist))))
+                                # plotImage(make_grid([obs[0], decoded_obs[0]]), mode='cv2', 
+                                #         save2path=os.path.join(figpath, "recons_{}.png".format(minibatch_num+epoch*len(minibatchlist))))
+                                # plotImage(deNormalize(detachToNumpy(obs[0])), "Input Image (Train)", mode='cv2', save2path=os.path.join(
+                                #     figpath, "input_{}.png".format(minibatch_num+epoch*len(minibatchlist))))
                                 if self.use_dae:
                                     plotImage(deNormalize(detachToNumpy(noisy_obs[0])), "Noisy Input Image (Train)")
                                 if self.perceptual_similarity_loss:
@@ -674,8 +678,8 @@ class SRL4robotics(BaseLearner):
                                               "Reconstructed Image DAE")
                                     plotImage(deNormalize(detachToNumpy(decoded_obs_denoiser_predicted[0])),
                                               "Reconstructed Image predicted DAE")
-                                plotImage(deNormalize(detachToNumpy(decoded_obs[0])), "Reconstructed Image", mode='cv2', save2path=os.path.join(
-                                    figpath, "recon_{}.png".format(minibatch_num+epoch*len(minibatchlist))))
+                                # plotImage(deNormalize(detachToNumpy(decoded_obs[0])), "Reconstructed Image", mode='cv2', save2path=os.path.join(
+                                #     figpath, "recon_{}.png".format(minibatch_num+epoch*len(minibatchlist))))
 
                             elif obs[0].shape[0] % 3 == 0:  # Multi-RGB
                                 for k in range(obs[0].shape[0] // 3):

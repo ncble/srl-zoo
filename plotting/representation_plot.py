@@ -13,6 +13,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 
 from utils import parseDataFolder, getInputBuiltin, loadData
+
 import cv2
 # Init seaborn
 sns.set()
@@ -113,29 +114,43 @@ def plot3dRepresentation(states, rewards, name="Learned State Representation",
     pauseOrClose(fig)
 
 
-def plotImage(image, name='Observation Sample', mode='matplotlib', save2path=None):
+def plotImage(images, name='Observation Sample', mode='matplotlib', save2path=None):
     """
-    Display an image
-    :param image: (np.ndarray) (with values in [0, 1])
+    Display an image or list of images
+    :param images: (np.ndarray) (with values in [0, 1])
     :param name: (str)
     """
     # Reorder channels
     assert mode in ['matplotlib', 'cv2']
-    if image.shape[0] == 3 and len(image.shape) == 3:
+    # if isinstance(images, list):
+    #     images = np.array(images)
+    #     if images.shape[-3] == 3:
+    #         # (..., n_channels, height, width) -> (..., height, width, n_channels)
+    #         images = np.transpose(images, tuple(np.arange(len(images.shape)-3))+(-2,-1,-3))
+    #     else:
+    #         assert images.shape[-1] == 3, "images should be either channels first or last."
+    #     img_shape = images.shape[-3:]
+    #     if len(images.shape) == 5:
+    #         rows, cols = images.shape[:2]
+    #     elif len(images.shape) == 4:
+
+    if images.shape[0] == 3 and len(images.shape) == 3:
         # (n_channels, height, width) -> (height, width, n_channels)
-        image = np.transpose(image, (1, 2, 0))
+        images = np.transpose(images, (1, 2, 0))
     if mode == 'matplotlib':
         updateDisplayMode()
         fig = plt.figure(name)
-        plt.imshow(image, interpolation='nearest')
+        plt.axis("off")
+        plt.imshow(images, interpolation='nearest')
         # plt.gca().invert_yaxis()
         plt.xticks([])
         plt.yticks([])
         pauseOrClose(fig)
     elif mode == 'cv2':
+
         if save2path is not None:
-            image = 255*image[..., ::-1]
-            cv2.imwrite(save2path, image.astype(int))
+            images = 255*images[..., ::-1]
+            cv2.imwrite(save2path, images.astype(int))
 
 
 
