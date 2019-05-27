@@ -24,8 +24,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='State Representation Learning with PyTorch')
     parser.add_argument('--epochs', type=int, default=30, metavar='N',
                         help='number of epochs to train (default: 30)')
-    parser.add_argument('--img-shape', type=str, default=None,
-                        help='image shape (default None, i.e. (3,224,224))')
+    parser.add_argument('--img-shape', type=str, default="(3,128,128)",
+                        help='image shape (default "(3,128,128)"')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
     parser.add_argument('--state-dim', type=int, default=2, help='state dimension (default: 2)')
@@ -71,6 +71,9 @@ if __name__ == '__main__':
                         help='Max percentage of input occlusion for masks when using DAE')
     parser.add_argument('--figpath', type=str, default=None,
                         help="Save figure the 'figpath'.")
+    parser.add_argument('--monitor', type=str, default='loss',
+                        choices=['pbar', 'loss'],
+                        help="Monitor mode: either print the losses ('loss') or show the progressbar ('pbar'). (default 'loss')")
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and th.cuda.is_available()
@@ -199,7 +202,8 @@ if __name__ == '__main__':
     saveConfig(exp_config, print_config=True)
     if args.figpath is not None:
         os.makedirs(args.figpath, exist_ok=True)
-    loss_history, learned_states, pairs_name_weights = srl.learn(images_path, actions, rewards, episode_starts, figpath=args.figpath)
+    loss_history, learned_states, pairs_name_weights = srl.learn(
+        images_path, actions, rewards, episode_starts, figdir=args.figpath, monitor_mode=args.monitor)
 
     # Update config with weights for each losses
     exp_config['losses_weights'] = pairs_name_weights

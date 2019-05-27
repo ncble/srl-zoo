@@ -13,7 +13,7 @@ import torch
 from torchvision.utils import make_grid
 import torch.utils.data
 from sklearn.utils import shuffle as sk_shuffle
-# from tqdm import tqdm
+from tqdm import tqdm
 
 from losses.losses import LossManager, autoEncoderLoss, roboticPriorsLoss, tripletLoss, rewardModelLoss, \
     rewardPriorLoss, forwardModelLoss, inverseModelLoss, episodePriorLoss, l1Loss, l2Loss, kullbackLeiblerLoss, \
@@ -63,7 +63,7 @@ class BaseLearner(object):
         # Seed the random generator
         np.random.seed(seed)
         torch.manual_seed(seed)
-        if cuda:
+        if cuda: # This will increase the training by 5-10%.
             # Make CuDNN Determinist
             torch.backends.cudnn.deterministic = True
             torch.cuda.manual_seed(seed)
@@ -194,7 +194,7 @@ class SRL4robotics(BaseLearner):
 
         self.cuda = cuda
         self.device = torch.device(
-            "cuda" if torch.cuda.is_available() and cuda else "cpu")
+            "cuda:0" if torch.cuda.is_available() and cuda else "cpu")
 
         if self.episode_prior:
             self.prior_discriminator = PriorDiscriminator(
@@ -283,7 +283,7 @@ class SRL4robotics(BaseLearner):
 
         return srl_model, exp_config
 
-    def learn(self, images_path, actions, rewards, episode_starts, figpath=None):
+    def learn(self, images_path, actions, rewards, episode_starts, figdir=None, monitor_mode='loss'):
         """
         Learn a state representation
         :param images_path: (numpy 1D array)
@@ -291,34 +291,19 @@ class SRL4robotics(BaseLearner):
         :param rewards: (numpy 1D array)
         :param episode_starts: (numpy 1D array) boolean array
                                 the ith index is True if one episode starts at this frame
+        :param figdir: directory path, save figures to the folder.
+        :param monitor_mode: options are ['loss', 'pbar']
         :return: (np.ndarray) the learned states for the given observations
         """
 
         print("\nYour are using the following weights for the losses:")
         pprint(self.losses_weights_dict)
-
+        assert monitor_mode in ['loss', 'pbar'], "monitor should be either 'loss' or 'prgressbar'"
         # PREPARE DATA -------------------------------------------------------------------------------------------------
         # here, we organize the data into minibatches
         # and find pairs for the respective loss terms (for robotics priors only)
 
-        num_samples = images_path.shape[0] - 1  # number of samples
-        # Stats about actions
-        action_set = set(actions)
-        n_actions = int(np.max(actions) + 1)
-        print("{} unique actions / {} actions".format(len(action_set), n_actions))
-        n_pairs_per_action = np.zeros(n_actions, dtype=np.int64)
-        n_obs_per_action = np.zeros(n_actions, dtype=np.int64)
-
-        for i in range(n_actions):
-            n_obs_per_action[i] = np.sum(actions == i)
-
-        print("Number of observations per action")
-        print(n_obs_per_action)
-
-        # indices for all time steps where the episode continues
-        # indices = np.array([i for i in range(num_samples)
-        #                     if not episode_starts[i + 1]], dtype='int64')
-        # np.random.shuffle(indices)
+        
         data_loader_params = {'batch_size': self.batch_size,
                   'shuffle': True,
                   'num_workers': N_WORKERS,
@@ -341,14 +326,20 @@ class SRL4robotics(BaseLearner):
         dataloader_train = torch.utils.data.DataLoader(train_set, **data_loader_params)
         dataloader_valid = torch.utils.data.DataLoader(valid_set, **data_loader_params)
 
-        # import ipdb; ipdb.set_trace()
-        # Print some info
-        # print("{} minibatches for training, {} samples".format(n_batch_per_epoch - n_val_batches,
-        #                                                        (n_batch_per_epoch - n_val_batches) * BATCH_SIZE))
-        # print("{} minibatches for validation, {} samples".format(n_val_batches, n_val_batches * BATCH_SIZE))
-        # assert n_val_batches > 0, "Not enough sample to create a validation set"
-
-        
+        # ========================= Print some info =========================
+        # Stats about actions
+        action_set = set(actions)
+        n_actions = int(np.max(actions) + 1)
+        print("{} unique actions / {} actions".format(len(action_set), n_actions))
+        n_pairs_per_action = np.zeros(n_actions, dtype=np.int64)
+        n_obs_per_action = np.zeros(n_actions, dtype=np.int64)
+        for i in range(n_actions):
+            n_obs_per_action[i] = np.sum(actions == i)
+        print("Number of observations per action")
+        print(n_obs_per_action)
+        print("Train: {} minibatches, {} samples".format(len(dataloader_train), len(train_set)))
+        print("Valid: {} minibatches, {} samples".format(len(dataloader_valid), len(valid_set)))
+        # =======================================================================
 
         dissimilar_pairs, same_actions_pairs = None, None
         if not self.no_priors:
@@ -399,11 +390,10 @@ class SRL4robotics(BaseLearner):
                 # GAN's training requires multi-optimizers, thus multiple loss_manger/epoch_loss/val_loss, etc.
                 epoch_loss_D, epoch_batches_D, val_loss_D = 0, 0, 0
                 epoch_loss_G, epoch_batches_G, val_loss_G = 0, 0, 0
-            
-
-            # for iter_ind, (minibatch_idx, obs, next_obs, noisy_obs, next_noisy_obs) in enumerate(data_loader):
 
             for valid_mode, dataloader in enumerate([dataloader_train, dataloader_valid]): ## [TODO: lisibility!]
+                if monitor_mode == 'pbar':
+                    pbar = tqdm(total=len(dataloader))
                 epoch_loss, epoch_batches = 0, 0
                 n_batch_per_epoch = len(dataloader)
 
@@ -618,19 +608,16 @@ class SRL4robotics(BaseLearner):
                         autoEncoderLoss(obs, reconstruct_obs, next_obs, reconstruct_obs_next, 10000.0, loss_manager)
                         ##############################
 
-                    # Compute weighted average of losses
-                    
+                    # Compute weighted average of losses of encoder part (including 'forward'/'inverse'/'reward' models)
                     loss_manager.updateLossHistory()
                     loss = loss_manager.computeTotalLoss()
                     
-                    # if validation_mode:
-                    #     val_loss += loss.item()
-                        # We do not optimize on validation data
-                        # so optimizer.step() is not called
-                    # else:
                     if valid_mode:
+                        # Only forward pass in the validation mode.
+                        # DO NOT waste time to backpropagate i.e. loss.backward() !
                         pass
                     else:
+                        # Backpropagate loss and update ('optimizer.step()') weights.
                         loss.backward()
                         if self.model_type == 'gan':
                             self.optimizer_E.step()
@@ -644,18 +631,22 @@ class SRL4robotics(BaseLearner):
                     else:
                         val_loss = epoch_loss / float(epoch_batches)
                     
-                    if iter_ind % ITER_FLAG == 0 or (iter_ind == n_batch_per_epoch-1):
-                        if not valid_mode:
-                            print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} | (elapsed time: {:.2f}s)".format(epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, time.time() - start_time), end="")
-                        else:
-                            print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} | (elapsed time: {:.2f}s)".format(epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, val_loss, time.time() - start_time), end="")
-                            # print("\r         (valid), {:.2%}, val_loss: {:.4f} | (elapsed time: {:.2f}s)".format(epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, val_loss, time.time() - start_time), end="")
-                    # val_loss += loss.item() #[TODO]
-                    # val_loss /= float(n_val_batches)
+                    if monitor_mode == 'loss':
+                        if iter_ind % ITER_FLAG == 0 or (iter_ind == n_batch_per_epoch-1):
+                            if not valid_mode:
+                                print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} | (elapsed time: {:.2f}s)".format(
+                                    epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, time.time() - start_time), end="")
+                            else:
+                                print("\r-------(valid): {:.2%}, val_loss: {:.4f} | (elapsed time: {:.2f}s)".format(
+                                    (iter_ind+1)/n_batch_per_epoch, val_loss, time.time() - start_time), end="")
+                    elif monitor_mode == 'pbar':
+                        pbar.update(1)
                 if valid_mode:
                     torch.set_grad_enabled(self.prev_mode)
-                    import ipdb; ipdb.set_trace()
-                print()
+                if monitor_mode == 'loss':
+                    print()
+                elif monitor_mode == 'pbar':
+                    pbar.close()
 
             
             # Even if loss_history is modified by LossManager
@@ -694,13 +685,13 @@ class SRL4robotics(BaseLearner):
                         # plotRepresentation(self.predStatesWithDataLoader(test_data_loader), rewards,
                         #                    add_colorbar=epoch == 0,
                         #                    name="Learned State Representation (Training Data)",
-                        #                    path=os.path.join(figpath, "{}.png".format(iter_ind+epoch))) ## [TODO]
+                        #                    path=os.path.join(figdir, "{}.png".format(iter_ind+epoch))) ## [TODO]
 
                         if self.use_autoencoder or self.use_vae or self.use_dae:
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB
                                 images = make_grid([obs[0], decoded_obs[0], obs[1], decoded_obs[1]], nrow=2) # , normalize=True, range=(0,1)
-                                plotImage(deNormalize(detachToNumpy(images)), mode='cv2', save2dir=figpath, index=iter_ind+epoch*n_batch_per_epoch)
+                                plotImage(deNormalize(detachToNumpy(images)), mode='cv2', save2dir=figdir, index=iter_ind+epoch*n_batch_per_epoch)
                                 if self.use_dae:
                                     plotImage(deNormalize(detachToNumpy(noisy_obs[0])), "Noisy Input Image (Train)")
                                 if self.perceptual_similarity_loss:
