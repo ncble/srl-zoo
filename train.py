@@ -81,7 +81,7 @@ if __name__ == '__main__':
     learner.VALIDATION_SIZE = args.val_size
     learner.BALANCED_SAMPLING = args.balanced_sampling
     plot_script.INTERACTIVE_PLOT = learner.DISPLAY_PLOTS
-
+    th.backends.cudnn.benchmark = True
     # Dealing with losses to use
     has_loss_description = [isinstance(loss, tuple) for loss in args.losses]
     has_consistent_description, has_weight, has_splits = False, False, False
@@ -197,7 +197,8 @@ if __name__ == '__main__':
 
     # Save configs in log folder
     saveConfig(exp_config, print_config=True)
-    os.makedirs(args.figpath, exist_ok=True)
+    if args.figpath is not None:
+        os.makedirs(args.figpath, exist_ok=True)
     loss_history, learned_states, pairs_name_weights = srl.learn(images_path, actions, rewards, episode_starts, figpath=args.figpath)
 
     # Update config with weights for each losses

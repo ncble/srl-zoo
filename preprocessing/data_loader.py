@@ -18,7 +18,7 @@ from torch.multiprocessing import Queue, Process
 
 
 from .utils import preprocessInput
-
+import torch.utils.data
 
 def sample_coordinates(coord_1, max_distance, percentage):
     """
@@ -373,3 +373,167 @@ class SupervisedDataLoader(DataLoader):
                 targets.append(y_values[excerpt])
 
         return minibatchlist, targets
+
+
+
+
+class RobotEnvDataset(torch.utils.data.Dataset):
+    """Characterizes a dataset for PyTorch"""
+    """
+    A Custom dataloader to work with our datasets, and to prepare data for the different models
+    (inverse, priors, autoencoder, ...)
+
+    :param minibatchlist: ([np.array]) list of observations indices (grouped per minibatch)
+    :param images_path: (np.array) Array of path to images
+    :param n_workers: (int) number of preprocessing worker (load and preprocess each image)
+    :param multi_view: (bool)
+    :param use_triplets: (bool)
+    :param infinite_loop: (bool) whether to have an iterator that can be resetted, set to False, it
+    :param max_queue_len: (int) Max number of minibatches that can be preprocessed at the same time
+    :param apply_occlusion: is the use of occlusion enabled - when using DAE (bool)
+    :param occlusion_percentage: max percentage of occlusion when using DAE (float)
+    :param is_training: (bool)
+    :param img_shape: (tuple or None) if None, image will not be resize, else: resize image to new shape (channels first)) e.g. img_shape = (3, 128, 128).
+
+        Set to True, the dataloader will output both `obs` and `next_obs` (a tuple of th.Tensor)
+        Set to false, it will only output one th.Tensor.
+    """
+    
+    def __init__(self, sample_indices, images_path, actions, rewards, episode_starts, 
+                 img_shape=None, 
+                 multi_view=False, use_triplets=False,
+                 apply_occlusion=False, occlusion_percentage=0.5,
+                 dtype=np.float32):
+        super(RobotEnvDataset, self).__init__()
+        ## Initialization
+        self.sample_indices = sample_indices
+        self.images_path = images_path
+        self.actions = actions
+        self.rewards = rewards
+        self.episode_starts = episode_starts
+
+        self.img_shape = img_shape
+        
+        self.use_triplets = use_triplets
+        self.multi_view = multi_view
+        # apply occlusion for training a DAE
+        self.apply_occlusion = apply_occlusion
+        self.occlusion_percentage = occlusion_percentage
+        
+        self.dtype = dtype
+    def __len__(self):
+        ## 'Denotes the total number of samples'
+        return len(self.sample_indices)
+    def _get_one_img(self, image_path):
+        # self.minibatchlist = minibatchlist
+        image_path = 'data/' + image_path.split('.jpg')[0] ## [TODO]
+
+        img = cv2.imread("{}.jpg".format(image_path))
+        if img is None:
+            raise ValueError("tried to load {}.jpg, but it was not found".format(image_path))
+        img = preprocessImage(img, img_reshape=self.img_shape, 
+                                    apply_occlusion=self.apply_occlusion, 
+                                    occlusion_percentage=self.occlusion_percentage)
+        img = img.transpose(2, 0, 1)
+        return img
+
+    def __getitem__(self, index):
+        ## 'Generates one sample of data': (main)
+
+        index = self.sample_indices[index] # real index of samples
+        if (index+1)>=len(self.actions) or self.episode_starts[index + 1]:
+            # the case where 'index' is the end of episode, no next observation.
+            index -= 1 # this may repeat some observations, but the proba is rare.
+        
+        image_path = self.images_path[index]
+        # Load data and get label
+        if not self.multi_view:
+            
+            img = self._get_one_img(image_path)
+            img_next = self._get_one_img(self.images_path[index+1])
+            action = self.actions[index]
+            reward = self.rewards[index]
+            return index, img.astype(self.dtype), img_next.astype(self.dtype), action, reward, 1, 1
+           
+        
+        else: ## [TODO: not tested yet]
+            raise NotImplementedError
+            images = []
+            # Load different view of the same timestep
+            for i in range(2):
+                img = cv2.imread("{}_{}.jpg".format(image_path, i + 1))
+                if img is None:
+                    raise ValueError("tried to load {}_{}.jpg, but it was not found".format(image_path, i + 1))
+                images.append(preprocessImage(img, img_reshape=self.img_shape, apply_occlusion=self.apply_occlusion,
+                                              occlusion_percentage=self.occlusion_percentage))
+            ####################
+            # loading a negative observation
+            if use_triplets:
+                # End of file format for positive & negative observations (camera 1) - length : 6 characters
+                extra_chars = '_1.jpg'
+                # getting path for all files of same record episode, e.g path_to_data/record_001/frame[0-9]{6}*
+                digits_path = glob.glob(image_path[:-6] + '[0-9]*' + extra_chars)
+                # getting the current & all frames' timesteps
+                current = int(image_path[-6:])
+                # For all others extract last 6 digits (timestep) after removing the extra chars
+                all_frame_steps = [int(k[:-len(extra_chars)][-6:]) for k in digits_path]
+                # removing current positive timestep from the list
+                all_frame_steps.remove(current)
+
+                # negative timestep by random sampling
+                length_set_steps = len(all_frame_steps)
+                negative = all_frame_steps[random.randint(0, length_set_steps - 1)]
+                negative_path = '{}{:06d}'.format(image_path[:-6], negative)
+
+                im3 = cv2.imread(negative_path + "_1.jpg")
+                if im3 is None:
+                    raise ValueError("tried to load {}_{}.jpg, but it was not found".format(negative_path, 1))
+                im3 = preprocessImage(im3, img_reshape=img_shape)
+                # stacking along channels
+                images.append(im3)
+            img = np.dstack(images)
+
+            return img.astype(self.dtype) #, y.astype(self.dtype)#.to(self.dtype), y.to(self.dtype)
+        return img.astype(self.dtype)
+        
+    # @staticmethod
+    # def preprocessImage(img, resize=None, data_format='channels_first', mode=0):
+    #     # assert data_format=='channels_first' or data_format=='channels_last'
+    #     if resize is not None:
+    #         new = cv2.resize(img, (resize, resize)) ## TODO update for tuple
+    #     else:
+    #         new = img
+    #     if data_format=='channels_first':
+    #         if mode == 0:
+    #             new = new.transpose(2,0,1)
+    #         else:
+    #             new = new.transpose(2,1,0) ## old, wrong, mode 1
+    #     new = new/255
+    #     new = 2*new - 1
+    #     return new
+    @staticmethod
+    def preprocessLabels(labels):
+        ### (Min, Max) labels[:, 0] = (0.452, 3.564)
+        ### (Min, Max) labels[:, 1] = (0.222, 3.795)
+        ## set to Min = 0.15, Max = 3.85
+        val_max = 3.85 #np.max(labels, axis=0)
+        val_min = 0.15 #np.min(labels, axis=0)
+        labels  = (labels - val_min) / (val_max - val_min)
+        labels = 2*labels - 1
+
+        return labels
+    
+    @staticmethod
+    def createTestMinibatchList(n_samples, batch_size):
+        """
+        Create list of minibatch for plotting
+        :param n_samples: (int)
+        :param batch_size: (int)
+        :return: ([np.array])
+        """
+        minibatchlist = []
+        for i in range(n_samples // batch_size + 1):
+            start_idx = i * batch_size
+            end_idx = min(n_samples, (i + 1) * batch_size)
+            minibatchlist.append(np.arange(start_idx, end_idx))
+        return minibatchlist

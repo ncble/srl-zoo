@@ -114,7 +114,7 @@ def plot3dRepresentation(states, rewards, name="Learned State Representation",
     pauseOrClose(fig)
 
 
-def plotImage(images, name='Observation Sample', mode='matplotlib', save2path=None):
+def plotImage(images, name='Observation Sample', mode='matplotlib', save2dir=None, index=0):
     """
     Display an image or list of images
     :param images: (np.ndarray) (with values in [0, 1])
@@ -122,6 +122,10 @@ def plotImage(images, name='Observation Sample', mode='matplotlib', save2path=No
     """
     # Reorder channels
     assert mode in ['matplotlib', 'cv2']
+    if save2dir is not None:
+        figpath = os.path.join(save2dir, "recons_{}.png".format(index))
+    else:
+        figpath = None
     # if isinstance(images, list):
     #     images = np.array(images)
     #     if images.shape[-3] == 3:
@@ -147,10 +151,9 @@ def plotImage(images, name='Observation Sample', mode='matplotlib', save2path=No
         plt.yticks([])
         pauseOrClose(fig)
     elif mode == 'cv2':
-
-        if save2path is not None:
+        if figpath is not None:
             images = 255*images[..., ::-1]
-            cv2.imwrite(save2path, images.astype(int))
+            cv2.imwrite(figpath, images.astype(int))
 
 
 
