@@ -401,8 +401,11 @@ class RobotEnvDataset(torch.utils.data.Dataset):
     
     def __init__(self, sample_indices, images_path, actions, rewards, episode_starts, 
                  img_shape=None, 
-                 multi_view=False, use_triplets=False,
-                 apply_occlusion=False, occlusion_percentage=0.5,
+                 is_training=True,
+                 multi_view=False, 
+                 use_triplets=False,
+                 apply_occlusion=False, 
+                 occlusion_percentage=0.5,
                  dtype=np.float32):
         super(RobotEnvDataset, self).__init__()
         ## Initialization
@@ -413,7 +416,7 @@ class RobotEnvDataset(torch.utils.data.Dataset):
         self.episode_starts = episode_starts
 
         self.img_shape = img_shape
-        
+        self.is_training = is_training
         self.use_triplets = use_triplets
         self.multi_view = multi_view
         # apply occlusion for training a DAE
@@ -448,13 +451,15 @@ class RobotEnvDataset(torch.utils.data.Dataset):
         image_path = self.images_path[index]
         # Load data and get label
         if not self.multi_view:
-            
-            img = self._get_one_img(image_path)
-            img_next = self._get_one_img(self.images_path[index+1])
-            action = self.actions[index]
-            reward = self.rewards[index]
-            return index, img.astype(self.dtype), img_next.astype(self.dtype), action, reward, 1, 1
-           
+            if self.is_training:
+                img = self._get_one_img(image_path)
+                img_next = self._get_one_img(self.images_path[index+1])
+                action = self.actions[index]
+                reward = self.rewards[index]
+                return index, img.astype(self.dtype), img_next.astype(self.dtype), action, reward, 1, 1
+            else:
+                img = self._get_one_img(image_path)
+                return img
         
         else: ## [TODO: not tested yet]
             raise NotImplementedError

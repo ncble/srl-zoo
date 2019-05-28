@@ -308,6 +308,10 @@ class SRL4robotics(BaseLearner):
                   'shuffle': True,
                   'num_workers': N_WORKERS,
                   'pin_memory': False}
+        data_loader_params_test = {'batch_size': 128,
+                  'shuffle': False,
+                  'num_workers': N_WORKERS,
+                  'pin_memory': False}
         sample_indices = np.arange(len(images_path))
         ## Shuffle datasets
         sample_indices, images_path, actions, rewards, episode_starts = sk_shuffle(sample_indices, images_path, actions, rewards, episode_starts, random_state=0)
@@ -316,16 +320,21 @@ class SRL4robotics(BaseLearner):
         indices_train, imgspath_train, act_train, rew_train, epis_train = sample_indices[:-valid_size], images_path[:-valid_size], actions[:-valid_size], rewards[:-valid_size], episode_starts[:-valid_size]
         indices_val, imgspath_val, act_val, rew_val, epis_val           = sample_indices[-valid_size:], images_path[-valid_size:], actions[-valid_size:], rewards[-valid_size:], episode_starts[-valid_size:]
         
-        train_set = RobotEnvDataset(indices_train, images_path, actions, rewards, episode_starts, img_shape=self.img_shape, multi_view=self.multi_view,
+        train_set = RobotEnvDataset(indices_train, images_path, actions, rewards, episode_starts, 
+                                 is_training=True, img_shape=self.img_shape, multi_view=self.multi_view,
                                  use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
                                  occlusion_percentage=self.occlusion_percentage, dtype=np.float32)
-        valid_set = RobotEnvDataset(indices_val, images_path, actions, rewards, episode_starts, img_shape=self.img_shape, multi_view=self.multi_view,
+        valid_set = RobotEnvDataset(indices_val, images_path, actions, rewards, episode_starts, 
+                                 is_training=True, img_shape=self.img_shape, multi_view=self.multi_view,
                                  use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
                                  occlusion_percentage=self.occlusion_percentage, dtype=np.float32)
-        
+        test_set = RobotEnvDataset(sample_indices, images_path, actions, rewards, episode_starts, 
+                                 is_training=False, img_shape=self.img_shape, multi_view=self.multi_view,
+                                 use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
+                                 occlusion_percentage=self.occlusion_percentage, dtype=np.float32)
         dataloader_train = torch.utils.data.DataLoader(train_set, **data_loader_params)
         dataloader_valid = torch.utils.data.DataLoader(valid_set, **data_loader_params)
-
+        dataloader_test  = torch.utils.data.DataLoader(test_set, **data_loader_params_test)
         # ========================= Print some info =========================
         # Stats about actions
         action_set = set(actions)
@@ -728,7 +737,7 @@ class SRL4robotics(BaseLearner):
         # return predicted states for training observations
         self.model.eval()
         with torch.no_grad():
-            pred_states = self.predStatesWithDataLoader(dataloader_valid)
+            pred_states = self.predStatesWithDataLoader(dataloader_test)
         pairs_loss_weight = [k for k in zip(loss_manager.names, loss_manager.weights)]
         if self.model_type == 'gan':
             pairs_loss_weight += [k for k in zip(loss_manager.names, loss_manager_D.weights)]
