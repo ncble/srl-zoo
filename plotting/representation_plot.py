@@ -17,30 +17,8 @@ from time import time
 import cv2
 # Init seaborn
 sns.set()
-INTERACTIVE_PLOT = False
 TITLE_MAX_LENGTH = 50
 
-
-def updateDisplayMode():
-    """
-    Enable or disable interactive plot
-    see: http://matplotlib.org/faq/usage_faq.html#what-is-interactive-mode
-    """
-    if INTERACTIVE_PLOT:
-        plt.ion()
-    else:
-        plt.ioff()
-
-
-def pauseOrClose(fig):
-    """
-    :param fig: (matplotlib figure object)
-    """
-    if INTERACTIVE_PLOT:
-        plt.draw()
-        plt.pause(0.0001)  # Small pause to update the plot
-    else:
-        plt.close(fig)
 
 
 def plotRepresentation(states, rewards, name="Learned State Representation",
@@ -78,7 +56,6 @@ def plotRepresentation(states, rewards, name="Learned State Representation",
 
 def plot2dRepresentation(states, rewards, name="Learned State Representation",
                          add_colorbar=True, path=None, cmap='coolwarm', true_states=None):
-    # updateDisplayMode()
     fig = plt.figure(name)
     # plt.clf()
     if true_states is not None:
@@ -94,14 +71,11 @@ def plot2dRepresentation(states, rewards, name="Learned State Representation",
         plt.colorbar(label='Reward')
     if path is not None:
         plt.savefig(path)
-    # pauseOrClose(fig)
 
 
 def plot3dRepresentation(states, rewards, name="Learned State Representation",
                          add_colorbar=True, path=None, cmap='coolwarm'):
-    # updateDisplayMode()
     fig = plt.figure(name)
-    # plt.clf()
     ax = fig.add_subplot(111, projection='3d')
     im = ax.scatter(states[:, 0], states[:, 1], states[:, 2],
                     s=7, c=rewards, cmap=cmap, linewidths=0.1)
@@ -114,7 +88,6 @@ def plot3dRepresentation(states, rewards, name="Learned State Representation",
         fig.colorbar(im, label='Reward')
     if path is not None:
         plt.savefig(path)
-    # pauseOrClose(fig)
 
 
 def plotImage(images, name='Observation Sample', mode='matplotlib', save2dir=None, index=0):
@@ -145,14 +118,11 @@ def plotImage(images, name='Observation Sample', mode='matplotlib', save2dir=Non
         # (n_channels, height, width) -> (height, width, n_channels)
         images = np.transpose(images, (1, 2, 0))
     if mode == 'matplotlib':
-        # updateDisplayMode()
         fig = plt.figure(name)
         plt.axis("off")
         plt.imshow(images, interpolation='nearest')
-        # plt.gca().invert_yaxis()
         # plt.xticks([])
         # plt.yticks([])
-        # pauseOrClose(fig)
         if figpath is not None:
             plt.savefig(figpath)
     elif mode == 'cv2':
@@ -335,7 +305,7 @@ def plotCorrelation(states_rewards, ground_truth, target_positions, only_print=F
     print("\nCorrelation value of the model's prediction with the Ground Truth:\n Max correlation vector (GTC): {}"
           "\n Mean : {:.2f}".format(correlation_max_vector, correlation_scalar / len(correlation_max_vector)))
     if not only_print:
-        pauseOrClose(fig)
+        plt.show()
     return correlation_max_vector, correlation_scalar / len(correlation_max_vector)
 
 

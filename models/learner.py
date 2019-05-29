@@ -397,11 +397,8 @@ class SRL4robotics(BaseLearner):
         
 
         for epoch in range(N_EPOCHS):
-            
-            
-            
-
             for valid_mode, dataloader in enumerate([dataloader_train, dataloader_valid]): ## [TODO: lisibility!]
+                # import ipdb; ipdb.set_trace()
                 if monitor_mode == 'pbar':
                     pbar = tqdm(total=len(dataloader))
                 if self.model_type == 'gan':
@@ -481,8 +478,6 @@ class SRL4robotics(BaseLearner):
 
                     # Actions associated to the observations of the current minibatch
                     
-                    # actions_st = torch.from_numpy(actions_st).view(-1, 1).requires_grad_(False).to(self.device)
-                    # actions_st = torch.from_numpy(action).view(-1, 1).to(self.device)
                     actions_st = action.view(-1, 1).to(self.device)
                     # L1 regularization
                     if self.losses_weights_dict['l1_reg'] > 0:
