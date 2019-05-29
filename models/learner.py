@@ -206,8 +206,7 @@ class SRL4robotics(BaseLearner):
             learnable_params = [param for param in self.model.parameters() if param.requires_grad]
             if self.episode_prior:
                 learnable_params += [p for p in self.prior_discriminator.parameters()]
-            self.optimizer = torch.optim.Adam(
-                learnable_params, lr=learning_rate)
+            self.optimizer = torch.optim.Adam(learnable_params, lr=learning_rate)
         else:
             assert not self.episode_prior, "NotImplementedError"
             self.optimizer_D = torch.optim.Adam(
@@ -453,8 +452,8 @@ class SRL4robotics(BaseLearner):
                             next_obs[:, :3:, :, :],
                             next_obs[:, 3:6, :, :],
                             next_obs[:, 6:, :, :])
-                    elif self.use_autoencoder:
-                        (states, decoded_obs), (next_states, decoded_next_obs) = self.model(obs), self.model(next_obs)
+                    # elif self.use_autoencoder: ## NEW [TODO]
+                    #     (states, decoded_obs), (next_states, decoded_next_obs) = self.model(obs), self.model(next_obs)
 
                     elif self.use_dae:
                         (states, decoded_obs), (next_states, decoded_next_obs) = \
@@ -514,7 +513,6 @@ class SRL4robotics(BaseLearner):
                                         loss_manager=loss_manager)
 
                     if self.use_reward_loss:
-                        # rewards_st = rewa[minibatch_idx]].copy() #[TODO]
                         rewards_st = reward.copy()
                         # Removing negative reward
                         rewards_st[rewards_st == -1] = 0
@@ -523,10 +521,10 @@ class SRL4robotics(BaseLearner):
                         rewardModelLoss(rewards_pred, rewards_st.long(), weight=self.losses_weights_dict['reward'],
                                         loss_manager=loss_manager)
 
-                    if self.use_autoencoder or self.use_dae:
-                        loss_type = "dae" if self.use_dae else "autoencoder"
-                        autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs,
-                                        weight=self.losses_weights_dict[loss_type], loss_manager=loss_manager)
+                    # if self.use_autoencoder or self.use_dae: ## NEW [TODO]
+                    #     loss_type = "dae" if self.use_dae else "autoencoder"
+                    #     autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs,
+                    #                     weight=self.losses_weights_dict[loss_type], loss_manager=loss_manager)
 
                     if self.use_vae:
 
@@ -612,23 +610,26 @@ class SRL4robotics(BaseLearner):
                         reconstruct_obs_next = self.model.generator(state_pred_next)
                         autoEncoderLoss(obs, reconstruct_obs, next_obs, reconstruct_obs_next, 10000.0, loss_manager)
                         ##############################
-
-                    # Compute weighted average of losses of encoder part (including 'forward'/'inverse'/'reward' models)
-                    loss_manager.updateLossHistory()
-                    loss = loss_manager.computeTotalLoss()
                     
-                    if valid_mode:
-                        # Only forward pass in the validation mode.
-                        # DO NOT waste time to backpropagate i.e. loss.backward() !
-                        pass
-                    else:
-                        # Backpropagate loss and update ('optimizer.step()') weights.
-                        loss.backward()
-                        if self.model_type == 'gan':
-                            self.optimizer_E.step()
-                        else:
-                            self.optimizer.step()
-                    epoch_loss += loss.item()
+                    ##### TEST NEW Training mechanism [TODO]
+                    loss = self.model.model.train_on_batch(obs, next_obs, self.optimizer, loss_manager, valid_mode=valid_mode, device=self.device)
+                    # Compute weighted average of losses of encoder part (including 'forward'/'inverse'/'reward' models)
+                    ####  ------------- NEW [TODO] -------------
+                    # loss_manager.updateLossHistory()
+                    # loss = loss_manager.computeTotalLoss()
+                    # if valid_mode:
+                    #     # Only forward pass in the validation mode.
+                    #     # DO NOT waste time to backpropagate i.e. loss.backward() !
+                    #     pass
+                    # else:
+                    #     # Backpropagate loss and update ('optimizer.step()') weights.
+                    #     loss.backward()
+                    #     if self.model_type == 'gan':
+                    #         self.optimizer_E.step()
+                    #     else:
+                    #         self.optimizer.step()
+                    # epoch_loss += loss.item()
+                    epoch_loss += loss ## NEW [TODO]
                     epoch_batches += 1
 
                     if not valid_mode:
@@ -696,13 +697,14 @@ class SRL4robotics(BaseLearner):
                         plotRepresentation(self.predStatesWithDataLoader(dataloader_test), rewards,
                                         #    add_colorbar=epoch == 0,
                                            name="Learned State Representation (Training Data)",
-                                           path=os.path.join(figdir_repr, "Epoch_{}.png".format(epoch+1))) ## [TODO]
+                                           path=os.path.join(figdir_repr, "Epoch_{}.png".format(epoch+1)))
                         if self.model_type == 'gan':
                             images = make_grid([obs[0], reconstruct_obs[0], next_obs[0], reconstruct_obs_next[0]], nrow=2)
                             plotImage(deNormalize(detachToNumpy(images)), mode='cv2', save2dir=figdir_recon, index=epoch+1)
                         if self.use_autoencoder or self.use_vae or self.use_dae:
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB
+                                decoded_obs = self.model.model.model.decode(self.model.model.model.encode(obs)) ## NEW [TODO]
                                 images = make_grid([obs[0], decoded_obs[0], obs[1], decoded_obs[1]], nrow=2) # , normalize=True, range=(0,1)
                                 plotImage(deNormalize(detachToNumpy(images)), mode='cv2', save2dir=figdir_recon, index=epoch+1)
                                 if self.use_dae:

@@ -1,4 +1,4 @@
-from .autoencoders import CNNAutoEncoder, DenseAutoEncoder, LinearAutoEncoder
+from .autoencoders import CNNAutoEncoder, DenseAutoEncoder, LinearAutoEncoder, CNNAETrainer
 from .vae import CNNVAE, DenseVAE
 from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel
 from .priors import SRLConvolutionalNetwork, SRLDenseNetwork, SRLLinear
@@ -55,7 +55,9 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         # Architecture
         if model_type == "custom_cnn":
             if "autoencoder" in losses or "dae" in losses:
-                self.model = CNNAutoEncoder(state_dim, img_shape=self.img_shape)
+                # self.model = CNNAutoEncoder(state_dim, img_shape=self.img_shape)
+                self.model = CNNAETrainer(state_dim, img_shape=self.img_shape)
+                self.model.build_model()
             elif "vae" in losses:
                 self.model = CNNVAE(state_dim, img_shape=self.img_shape)
             else:

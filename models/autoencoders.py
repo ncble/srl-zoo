@@ -2,7 +2,9 @@ from __future__ import print_function, division, absolute_import
 
 from .models import *
 from torchsummary import summary
-
+from .base_trainer import BaseTrainer
+import torch
+from losses.losses import autoEncoderLoss
 class LinearAutoEncoder(BaseModelAutoEncoder):
     """
     :param input_dim: (int)
@@ -119,6 +121,29 @@ class CNNAutoEncoder(BaseModelAutoEncoder):
         decoded = decoded.view(x.size(0), 64, self.img_high, self.img_width)
         return self.decoder_conv(decoded)
 
+class CNNAETrainer(BaseTrainer):
+    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+        super().__init__()
+        self.state_dim = state_dim
+        self.img_shape = img_shape
+    def build_model(self):
+        self.model = CNNAutoEncoder(state_dim=self.state_dim, img_shape=self.img_shape)
+    def getStates(self, x):
+        return self.model.encode(x)
+    def train_on_batch(self, obs, next_obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
+        (states, decoded_obs), (next_states, decoded_next_obs) = self.model(obs), self.model(next_obs)
+        autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs, weight=1.0, loss_manager=loss_manager)
+        loss_manager.updateLossHistory()
+        loss = loss_manager.computeTotalLoss()
+        if not valid_mode:
+            loss.backward()
+            optimizer.step()
+        else:
+            pass
+        loss = loss.item()
+        return loss
+    def forward(self, x):
+        return self.model.encode(x) #[0] ## [TODO: original autoencoder code is too ugly !]
 if __name__ == "__main__":
     print("Start")
     from torchsummary import summary
