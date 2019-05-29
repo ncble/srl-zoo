@@ -4,7 +4,10 @@ from .models import *
 from torchsummary import summary
 from .base_trainer import BaseTrainer
 import torch
-from losses.losses import autoEncoderLoss
+# try:
+#     from losses.losses import autoEncoderLoss
+# except ImportError:
+#     from ..losses.losses import autoEncoderLoss
 class LinearAutoEncoder(BaseModelAutoEncoder):
     """
     :param input_dim: (int)
