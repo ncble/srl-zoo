@@ -69,21 +69,23 @@ if __name__ == '__main__':
                         help='state dimension of the pre-trained dae (default: 200)')
     parser.add_argument('--occlusion-percentage', type=float, default=0.5,
                         help='Max percentage of input occlusion for masks when using DAE')
-    parser.add_argument('--figpath', type=str, default=None,
-                        help="Save figure the 'figpath'.")
+    parser.add_argument('--figdir', type=str, default=None,
+                        help="Save figure the 'figdir'.")
     parser.add_argument('--monitor', type=str, default='loss',
                         choices=['pbar', 'loss'],
                         help="Monitor mode: either print the losses ('loss') or show the progressbar ('pbar'). (default 'loss')")
+    parser.add_argument('--num-worker', type=int, default=10,
+                        help="Number of CPUs to use for dataloader.")
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and th.cuda.is_available()
     args.data_folder = parseDataFolder(args.data_folder)
-    learner.DISPLAY_PLOTS = not args.no_display_plots
+    learner.SAVE_PLOTS = not args.no_display_plots
     learner.N_EPOCHS = args.epochs
     learner.BATCH_SIZE = args.batch_size
     learner.VALIDATION_SIZE = args.val_size
     learner.BALANCED_SAMPLING = args.balanced_sampling
-    plot_script.INTERACTIVE_PLOT = learner.DISPLAY_PLOTS
+    learner.N_WORKERS = args.num_worker
     th.backends.cudnn.benchmark = True
     # Dealing with losses to use
     has_loss_description = [isinstance(loss, tuple) for loss in args.losses]
@@ -200,10 +202,10 @@ if __name__ == '__main__':
 
     # Save configs in log folder
     saveConfig(exp_config, print_config=True)
-    if args.figpath is not None:
-        os.makedirs(args.figpath, exist_ok=True)
+    if args.figdir is not None:
+        os.makedirs(args.figdir, exist_ok=True)
     loss_history, learned_states, pairs_name_weights = srl.learn(
-        images_path, actions, rewards, episode_starts, figdir=args.figpath, monitor_mode=args.monitor)
+        images_path, actions, rewards, episode_starts, figdir=args.figdir, monitor_mode=args.monitor)
 
     # Update config with weights for each losses
     exp_config['losses_weights'] = pairs_name_weights
@@ -223,5 +225,5 @@ if __name__ == '__main__':
     correlationCall(exp_config, plot=not args.no_display_plots)
 
     # Do not close plot at the end of training
-    if learner.DISPLAY_PLOTS:
+    if learner.SAVE_PLOTS:
         getInputBuiltin()('\nPress any key to exit.')

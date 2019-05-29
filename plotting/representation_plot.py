@@ -13,7 +13,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 
 from utils import parseDataFolder, getInputBuiltin, loadData
-
+from time import time
 import cv2
 # Init seaborn
 sns.set()
@@ -56,6 +56,8 @@ def plotRepresentation(states, rewards, name="Learned State Representation",
     :param cmap: (str)
     :param true_states: project a 1D predicted states onto the ground_truth
     """
+    st = time()
+    plt.close('all')
     state_dim = states.shape[1]
     if state_dim != 1 and (fit_pca or state_dim > 3):
         name += " (PCA)"
@@ -71,13 +73,14 @@ def plotRepresentation(states, rewards, name="Learned State Representation",
         plot2dRepresentation(states, rewards, name, add_colorbar, path, cmap)
     else:
         plot3dRepresentation(states, rewards, name, add_colorbar, path, cmap)
-
+    plt.close('all')
+    print("Elapsed time : {:.2f}s".format(time()-st))
 
 def plot2dRepresentation(states, rewards, name="Learned State Representation",
                          add_colorbar=True, path=None, cmap='coolwarm', true_states=None):
-    updateDisplayMode()
+    # updateDisplayMode()
     fig = plt.figure(name)
-    plt.clf()
+    # plt.clf()
     if true_states is not None:
         plt.scatter(true_states[:len(states), 0], true_states[:len(states), 1], s=7, c=states[:, 0], cmap=cmap,
                     linewidths=0.1)
@@ -91,14 +94,14 @@ def plot2dRepresentation(states, rewards, name="Learned State Representation",
         plt.colorbar(label='Reward')
     if path is not None:
         plt.savefig(path)
-    pauseOrClose(fig)
+    # pauseOrClose(fig)
 
 
 def plot3dRepresentation(states, rewards, name="Learned State Representation",
                          add_colorbar=True, path=None, cmap='coolwarm'):
-    updateDisplayMode()
+    # updateDisplayMode()
     fig = plt.figure(name)
-    plt.clf()
+    # plt.clf()
     ax = fig.add_subplot(111, projection='3d')
     im = ax.scatter(states[:, 0], states[:, 1], states[:, 2],
                     s=7, c=rewards, cmap=cmap, linewidths=0.1)
@@ -111,7 +114,7 @@ def plot3dRepresentation(states, rewards, name="Learned State Representation",
         fig.colorbar(im, label='Reward')
     if path is not None:
         plt.savefig(path)
-    pauseOrClose(fig)
+    # pauseOrClose(fig)
 
 
 def plotImage(images, name='Observation Sample', mode='matplotlib', save2dir=None, index=0):
@@ -142,14 +145,16 @@ def plotImage(images, name='Observation Sample', mode='matplotlib', save2dir=Non
         # (n_channels, height, width) -> (height, width, n_channels)
         images = np.transpose(images, (1, 2, 0))
     if mode == 'matplotlib':
-        updateDisplayMode()
+        # updateDisplayMode()
         fig = plt.figure(name)
         plt.axis("off")
         plt.imshow(images, interpolation='nearest')
         # plt.gca().invert_yaxis()
-        plt.xticks([])
-        plt.yticks([])
-        pauseOrClose(fig)
+        # plt.xticks([])
+        # plt.yticks([])
+        # pauseOrClose(fig)
+        if figpath is not None:
+            plt.savefig(figpath)
     elif mode == 'cv2':
         if figpath is not None:
             images = 255*images[..., ::-1]
