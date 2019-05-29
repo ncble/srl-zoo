@@ -4,10 +4,10 @@ from .models import *
 from torchsummary import summary
 from .base_trainer import BaseTrainer
 import torch
-# try:
-#     from losses.losses import autoEncoderLoss
-# except ImportError:
-#     from ..losses.losses import autoEncoderLoss
+try:
+    from losses.losses import autoEncoderLoss
+except ImportError:
+    from srl_zoo.losses.losses import autoEncoderLoss
 class LinearAutoEncoder(BaseModelAutoEncoder):
     """
     :param input_dim: (int)
@@ -124,6 +124,7 @@ class CNNAutoEncoder(BaseModelAutoEncoder):
         decoded = decoded.view(x.size(0), 64, self.img_high, self.img_width)
         return self.decoder_conv(decoded)
 
+
 class CNNAETrainer(BaseTrainer):
     def __init__(self, state_dim=2, img_shape=(3,224,224)):
         super().__init__()
@@ -131,10 +132,10 @@ class CNNAETrainer(BaseTrainer):
         self.img_shape = img_shape
     def build_model(self):
         self.model = CNNAutoEncoder(state_dim=self.state_dim, img_shape=self.img_shape)
-    def getStates(self, x):
-        return self.model.encode(x)
     def train_on_batch(self, obs, next_obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
-        (states, decoded_obs), (next_states, decoded_next_obs) = self.model(obs), self.model(next_obs)
+        # (states, decoded_obs), (next_states, decoded_next_obs) = self.model(obs), self.model(next_obs)
+        decoded_obs = self.model.decode(self.model(obs))
+        decoded_next_obs = self.model.decode(self.model(next_obs))
         autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs, weight=1.0, loss_manager=loss_manager)
         loss_manager.updateLossHistory()
         loss = loss_manager.computeTotalLoss()
@@ -146,7 +147,7 @@ class CNNAETrainer(BaseTrainer):
         loss = loss.item()
         return loss
     def forward(self, x):
-        return self.model.encode(x) #[0] ## [TODO: original autoencoder code is too ugly !]
+        return self.model(x) #[0] ## [TODO: original autoencoder code is too ugly !]
 if __name__ == "__main__":
     print("Start")
     from torchsummary import summary

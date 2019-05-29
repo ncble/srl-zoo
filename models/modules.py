@@ -94,13 +94,6 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
             # pretrained resnet18 with fixed weights
             self.model = EmbeddingNet(state_dim)
 
-    def getStates(self, observations):
-        """
-        :param observations: (th.Tensor)
-        :return: (th.Tensor)
-        """
-        return self.model.getStates(observations)
-
     def forward(self, x):
         if self.model_type == 'linear' or self.model_type == 'mlp':
             x = x.contiguous()

@@ -57,7 +57,7 @@ class BaseLearner(object):
         super(BaseLearner, self).__init__()
         self.state_dim = state_dim
         self.batch_size = batch_size
-        self.model = None
+        self.module = None
         self.seed = seed
         self.use_dae = False
         # Seed the random generator
@@ -79,7 +79,7 @@ class BaseLearner(object):
         :return: (np.ndarray)
         """
         # Move the tensor back to the cpu
-        return detachToNumpy(self.model.getStates(observations))
+        return detachToNumpy(self.module(observations))
 
     def predStatesWithDataLoader(self, data_loader):
         """
@@ -181,11 +181,11 @@ class SRL4robotics(BaseLearner):
 
             if isinstance(split_dimensions, OrderedDict) and sum(split_dimensions.values()) > 0:
                 printYellow("Using splitted representation")
-                self.model = SRLModulesSplit(state_dim=self.state_dim, action_dim=self.dim_action,
+                self.module = SRLModulesSplit(state_dim=self.state_dim, action_dim=self.dim_action,
                                              model_type=model_type, cuda=cuda, losses=losses,
                                              split_dimensions=split_dimensions, inverse_model_type=inverse_model_type)
             else:
-                self.model = SRLModules(state_dim=self.state_dim, img_shape=self.img_shape, action_dim=self.dim_action, model_type=model_type,
+                self.module = SRLModules(state_dim=self.state_dim, img_shape=self.img_shape, action_dim=self.dim_action, model_type=model_type,
                                         cuda=cuda, losses=losses, inverse_model_type=inverse_model_type)
         else:
             raise ValueError("Unknown model: {}".format(model_type))
@@ -200,27 +200,27 @@ class SRL4robotics(BaseLearner):
             self.prior_discriminator = PriorDiscriminator(
                 2 * self.state_dim).to(self.device)
 
-        self.model = self.model.to(self.device)
+        self.module = self.module.to(self.device)
 
         if self.model_type != 'gan':
-            learnable_params = [param for param in self.model.parameters() if param.requires_grad]
+            learnable_params = [param for param in self.module.parameters() if param.requires_grad]
             if self.episode_prior:
                 learnable_params += [p for p in self.prior_discriminator.parameters()]
             self.optimizer = torch.optim.Adam(learnable_params, lr=learning_rate)
         else:
             assert not self.episode_prior, "NotImplementedError"
             self.optimizer_D = torch.optim.Adam(
-                self.model.discriminator.parameters(), lr=learning_rate_gan[0], betas=(0.5, 0.9))
+                self.module.discriminator.parameters(), lr=learning_rate_gan[0], betas=(0.5, 0.9))
             self.optimizer_G = torch.optim.Adam(
-                self.model.generator.parameters(), lr=learning_rate_gan[1], betas=(0.5, 0.9))
+                self.module.generator.parameters(), lr=learning_rate_gan[1], betas=(0.5, 0.9))
             combined_E_params = [
-                param for param in self.model.model.parameters() if param.requires_grad]
+                param for param in self.module.model.parameters() if param.requires_grad]
             combined_E_params += [
-                param for param in self.model.forward_net.parameters() if param.requires_grad]
+                param for param in self.module.forward_net.parameters() if param.requires_grad]
             combined_E_params += [
-                param for param in self.model.inverse_net.parameters() if param.requires_grad]
+                param for param in self.module.inverse_net.parameters() if param.requires_grad]
             combined_E_params += [
-                param for param in self.model.reward_net.parameters() if param.requires_grad]
+                param for param in self.module.reward_net.parameters() if param.requires_grad]
             self.optimizer_E = torch.optim.Adam(
                 combined_E_params, lr=learning_rate, betas=(0.5, 0.9))
             # [TODO: check learnable parameters]
@@ -376,12 +376,12 @@ class SRL4robotics(BaseLearner):
         
         # TRAINING -----------------------------------------------------------------------------------------------------
         loss_history = defaultdict(list)
-        loss_manager = LossManager(self.model, loss_history)
+        loss_manager = LossManager(self.module, loss_history)
         if self.model_type == 'gan':
             loss_history_D = defaultdict(list)
             loss_history_G = defaultdict(list)
-            loss_manager_D = LossManager(self.model.discriminator, loss_history_D)
-            loss_manager_G = LossManager(self.model.generator, loss_history_G)
+            loss_manager_D = LossManager(self.module.discriminator, loss_history_D)
+            loss_manager_G = LossManager(self.module.generator, loss_history_G)
 
         best_error = np.inf
         best_model_path = "{}/srl_model.pth".format(self.log_folder)
@@ -392,7 +392,7 @@ class SRL4robotics(BaseLearner):
             global N_EPOCHS
             N_EPOCHS = 0
             printYellow("Skipping training because using random features")
-            torch.save(self.model.state_dict(), best_model_path)
+            torch.save(self.module.state_dict(), best_model_path)
         
 
         for epoch in range(N_EPOCHS):
@@ -409,13 +409,13 @@ class SRL4robotics(BaseLearner):
 
                 start_time = time.time()
                 if valid_mode:
-                    self.model.eval()
+                    self.module.eval()
                     # with torch.no_grad():
                     self.prev_mode = torch.is_grad_enabled()
                     torch.set_grad_enabled(False)
                     # torch._C.set_grad_enabled(False)
                 else:
-                    self.model.train()
+                    self.module.train()
                 
                 for iter_ind, (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) in enumerate(dataloader):
                     obs, next_obs = obs.to(self.device), next_obs.to(self.device)
@@ -444,25 +444,22 @@ class SRL4robotics(BaseLearner):
 
                     # Predict states given observations as in Time Contrastive Network (Triplet Loss) [Sermanet et al.]
                     if self.use_triplets:
-                        states, positive_states, negative_states = self.model.forwardTriplets(obs[:, :3:, :, :],
+                        states, positive_states, negative_states = self.module.forwardTriplets(obs[:, :3:, :, :],
                                                                                             obs[:, 3:6, :, :],
                                                                                             obs[:, 6:, :, :])
 
-                        next_states, next_positive_states, next_negative_states = self.model.forwardTriplets(
+                        next_states, next_positive_states, next_negative_states = self.module.forwardTriplets(
                             next_obs[:, :3:, :, :],
                             next_obs[:, 3:6, :, :],
                             next_obs[:, 6:, :, :])
-                    # elif self.use_autoencoder: ## NEW [TODO]
-                    #     (states, decoded_obs), (next_states, decoded_next_obs) = self.model(obs), self.model(next_obs)
-
                     elif self.use_dae:
                         (states, decoded_obs), (next_states, decoded_next_obs) = \
-                            self.model(noisy_obs), self.model(next_noisy_obs)
+                            self.module(noisy_obs), self.module(next_noisy_obs)
 
                     elif self.use_vae:
-                        (decoded_obs, mu, logvar), (next_decoded_obs, next_mu, next_logvar) = self.model(obs), \
-                                                                                            self.model(next_obs)
-                        states, next_states = self.model.getStates(obs), self.model.getStates(next_obs)
+                        (decoded_obs, mu, logvar), (next_decoded_obs, next_mu, next_logvar) = self.module(obs), \
+                                                                                            self.module(next_obs)
+                        states, next_states = self.module(obs), self.module(next_obs)
 
                         if self.perceptual_similarity_loss:
                             # Predictions for the perceptual similarity loss as in DARLA
@@ -473,7 +470,7 @@ class SRL4robotics(BaseLearner):
                             (states_denoiser_predicted, decoded_obs_denoiser_predicted) = self.denoiser(decoded_obs)
                             (next_states_denoiser_predicted, decoded_next_obs_denoiser_predicted) = self.denoiser(next_decoded_obs)
                     else:
-                        states, next_states = self.model(obs), self.model(next_obs)
+                        states, next_states = self.module(obs), self.module(next_obs)
 
                     # Actions associated to the observations of the current minibatch
                     
@@ -502,13 +499,13 @@ class SRL4robotics(BaseLearner):
                                         weight=self.losses_weights_dict['priors'], loss_manager=loss_manager)
 
                     if self.use_forward_loss:
-                        next_states_pred = self.model.forwardModel(states, actions_st)
+                        next_states_pred = self.module.forwardModel(states, actions_st)
                         forwardModelLoss(next_states_pred, next_states,
                                         weight=self.losses_weights_dict['forward'],
                                         loss_manager=loss_manager)
 
                     if self.use_inverse_loss:
-                        actions_pred = self.model.inverseModel(states, next_states)
+                        actions_pred = self.module.inverseModel(states, next_states)
                         inverseModelLoss(actions_pred, actions_st, weight=self.losses_weights_dict['inverse'],
                                         loss_manager=loss_manager)
 
@@ -517,7 +514,7 @@ class SRL4robotics(BaseLearner):
                         # Removing negative reward
                         rewards_st[rewards_st == -1] = 0
                         rewards_st = torch.from_numpy(rewards_st).to(self.device)
-                        rewards_pred = self.model.rewardModel(states, next_states)
+                        rewards_pred = self.module.rewardModel(states, next_states)
                         rewardModelLoss(rewards_pred, rewards_st.long(), weight=self.losses_weights_dict['reward'],
                                         loss_manager=loss_manager)
 
@@ -553,7 +550,7 @@ class SRL4robotics(BaseLearner):
                     if self.use_triplets:
                         tripletLoss(states, positive_states, negative_states, weight=self.losses_weights_dict['triplet'],
                                     loss_manager=loss_manager, alpha=0.2)
-
+                    """
                     if self.model_type == 'gan':
                         label_valid = torch.ones((obs.size(0), 1)).to(self.device)
                         label_fake = torch.zeros((obs.size(0), 1)).to(self.device)
@@ -561,11 +558,11 @@ class SRL4robotics(BaseLearner):
                         # === Train the Discriminator first ===
                         sample_state = torch.randn((obs.size(0), self.state_dim),
                                         requires_grad=False).to(self.device)
-                        fake_img = self.model.generator(sample_state)
+                        fake_img = self.module.generator(sample_state)
                         # fake_loss = 
-                        ganNonSaturateLoss(self.model.discriminator(fake_img.detach()), label_fake, weight=1.0, loss_manager=loss_manager_D, name="ns_loss_D_fake")
+                        ganNonSaturateLoss(self.module.discriminator(fake_img.detach()), label_fake, weight=1.0, loss_manager=loss_manager_D, name="ns_loss_D_fake")
                         # real_loss = 
-                        ganNonSaturateLoss(self.model.discriminator(obs), label_valid, weight=1.0, loss_manager=loss_manager_D, name="ns_loss_D_real")
+                        ganNonSaturateLoss(self.module.discriminator(obs), label_valid, weight=1.0, loss_manager=loss_manager_D, name="ns_loss_D_real")
                         # d_loss = (real_loss + fake_loss) / 2
                         loss_manager_D.updateLossHistory()
                         d_loss = loss_manager_D.computeTotalLoss()
@@ -582,8 +579,8 @@ class SRL4robotics(BaseLearner):
                         # === Train the Generator ===
                         sample_state = torch.randn((obs.size(0), self.state_dim),
                                         requires_grad=False).to(self.device)
-                        fake_img = self.model.generator(sample_state)
-                        fake_rating = self.model.discriminator(fake_img)
+                        fake_img = self.module.generator(sample_state)
+                        fake_rating = self.module.discriminator(fake_img)
                         ganNonSaturateLoss(fake_rating, label_valid, weight=1.0, loss_manager=loss_manager_G, name="ns_loss_G")
                         loss_manager_G.updateLossHistory()
                         g_loss = loss_manager_G.computeTotalLoss()
@@ -604,15 +601,16 @@ class SRL4robotics(BaseLearner):
                             val_loss_G = epoch_loss_G / float(epoch_batches_G)
                         ##############################
                         # === Train the Encoder and the other components (e.g. forward/inverse/reward model) ===
-                        state_pred = self.model.model(obs)
-                        reconstruct_obs = self.model.generator(state_pred)
-                        state_pred_next = self.model.model(next_obs)
-                        reconstruct_obs_next = self.model.generator(state_pred_next)
+                        state_pred = self.module.model(obs)
+                        reconstruct_obs = self.module.generator(state_pred)
+                        state_pred_next = self.module.model(next_obs)
+                        reconstruct_obs_next = self.module.generator(state_pred_next)
                         autoEncoderLoss(obs, reconstruct_obs, next_obs, reconstruct_obs_next, 10000.0, loss_manager)
                         ##############################
-                    
+                    """
                     ##### TEST NEW Training mechanism [TODO]
-                    loss = self.model.model.train_on_batch(obs, next_obs, self.optimizer, loss_manager, valid_mode=valid_mode, device=self.device)
+                    loss = self.module.model.train_on_batch(
+                        obs, next_obs, self.optimizer, loss_manager, valid_mode=valid_mode, device=self.device)
                     # Compute weighted average of losses of encoder part (including 'forward'/'inverse'/'reward' models)
                     ####  ------------- NEW [TODO] -------------
                     # loss_manager.updateLossHistory()
@@ -681,7 +679,7 @@ class SRL4robotics(BaseLearner):
             # Save best model
             if val_loss < best_error: ## [TODO]
                 best_error = val_loss
-                torch.save(self.model.state_dict(), best_model_path)
+                torch.save(self.module.state_dict(), best_model_path)
 
             if np.isnan(train_loss):
                 printRed("NaN Loss, consider increasing NOISE_STD in the gaussian noise layer")
@@ -690,7 +688,7 @@ class SRL4robotics(BaseLearner):
             # Then we print the results for this epoch:
             if (epoch + 1) % EPOCH_FLAG == 0:
                 if figdir is not None:
-                    self.model.eval()
+                    self.module.eval()
                     with torch.no_grad():
                         # Optionally plot the current state space
                         print("Predicting states for all the observations...")
@@ -704,7 +702,7 @@ class SRL4robotics(BaseLearner):
                         if self.use_autoencoder or self.use_vae or self.use_dae:
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB
-                                decoded_obs = self.model.model.model.decode(self.model.model.model.encode(obs)) ## NEW [TODO]
+                                decoded_obs = self.module.model.model.decode(self.module.model(obs)) ## NEW [TODO]
                                 images = make_grid([obs[0], decoded_obs[0], obs[1], decoded_obs[1]], nrow=2) # , normalize=True, range=(0,1)
                                 plotImage(deNormalize(detachToNumpy(images)), mode='cv2', save2dir=figdir_recon, index=epoch+1)
                                 if self.use_dae:
@@ -741,11 +739,11 @@ class SRL4robotics(BaseLearner):
             # plt.close("all")
 
         # Load best model before predicting states
-        self.model.load_state_dict(torch.load(best_model_path))
+        self.module.load_state_dict(torch.load(best_model_path))
 
         print("Predicting states for all the observations...")
         # return predicted states for training observations
-        self.model.eval()
+        self.module.eval()
         with torch.no_grad():
             pred_states = self.predStatesWithDataLoader(dataloader_test)
         pairs_loss_weight = [k for k in zip(loss_manager.names, loss_manager.weights)]

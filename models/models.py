@@ -81,14 +81,6 @@ class BaseModelAutoEncoder(BaseModelSRL):
 
             nn.ConvTranspose2d(64, getNChannels(), kernel_size=4, stride=2),  # 224x224xN_CHANNELS
         )
-
-    def getStates(self, observations):
-        """
-        :param observations: (th.Tensor)
-        :return: (th.Tensor)
-        """
-        return self.encode(observations)
-
     def encode(self, x):
         """
         :param x: (th.Tensor)
@@ -108,10 +100,7 @@ class BaseModelAutoEncoder(BaseModelSRL):
         :param x: (th.Tensor)
         :return: (th.Tensor)
         """
-        input_shape = x.size()
-        encoded = self.encode(x)
-        decoded = self.decode(encoded).view(input_shape)
-        return encoded, decoded
+        return self.encode(x)
 
 
 class BaseModelVAE(BaseModelAutoEncoder):
