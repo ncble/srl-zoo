@@ -431,6 +431,9 @@ class Encoder(BaseModelSRL):
         x = self.activations['lrelu'](x)
         x = self.last(x)
         return x
+    
+    # def train_on_batch(self, loss, ):
+
 
 
 if __name__ == "__main__":

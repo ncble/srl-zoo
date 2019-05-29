@@ -56,7 +56,7 @@ if __name__ == '__main__':
                         help='Enable use of multiple camera')
     parser.add_argument('--balanced-sampling', action='store_true', default=False,
                         help='Force balanced sampling for episode independent prior instead of uniform')
-    parser.add_argument('--losses', nargs='+', default=["inverse"], **parseLossArguments(
+    parser.add_argument('--losses', nargs='+', default=[], **parseLossArguments(
         choices=["forward", "inverse", "reward", "priors", "episode-prior", "reward-prior", "triplet",
                  "autoencoder", "vae", "perceptual", "dae", "random"],
         help='The wanted losses. One may also want to specify a weight and dimension '
@@ -90,7 +90,7 @@ if __name__ == '__main__':
     # Dealing with losses to use
     has_loss_description = [isinstance(loss, tuple) for loss in args.losses]
     has_consistent_description, has_weight, has_splits = False, False, False
-    if all(has_loss_description):
+    if all(has_loss_description) and len(has_loss_description)>0:
         len_description = [len(item_loss) for item_loss in args.losses]
         has_consistent_description = sum(len_description) / len(len_description) == len_description[0]
         has_weight = has_consistent_description
@@ -168,7 +168,9 @@ if __name__ == '__main__':
         log_folder, experiment_name = getLogFolderName(exp_config)
         args.log_folder = log_folder
     else:
+        os.makedirs(args.log_folder, exist_ok=True)
         experiment_name = "{}_{}".format(args.model_type, losses)
+
 
     exp_config['log-folder'] = args.log_folder
     exp_config['experiment-name'] = experiment_name
