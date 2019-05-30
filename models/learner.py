@@ -194,17 +194,17 @@ class SRL4robotics(BaseLearner):
         print("Using {} model".format(model_type))
 
         self.cuda = cuda
-        self.device = torch.device(
-            "cuda:0" if torch.cuda.is_available() and cuda else "cpu")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() and cuda else "cpu")
 
         if self.episode_prior:
-            self.prior_discriminator = PriorDiscriminator(
-                2 * self.state_dim).to(self.device)
+            self.prior_discriminator = PriorDiscriminator(2 * self.state_dim).to(self.device)
 
         self.module = self.module.to(self.device)
 
         if self.model_type != 'gan':
-            learnable_params = [param for param in self.module.parameters() if param.requires_grad]
+            # learnable_params = [param for param in self.module.parameters() if param.requires_grad]
+            learnable_params = self.module.parameters() ## NEW [TODO]
+            
             if self.episode_prior:
                 learnable_params += [p for p in self.prior_discriminator.parameters()]
             self.optimizer = torch.optim.Adam(learnable_params, lr=learning_rate)
@@ -321,9 +321,9 @@ class SRL4robotics(BaseLearner):
         sample_indices, images_path, actions, rewards, episode_starts = sk_shuffle(sample_indices, images_path, actions, rewards, episode_starts, random_state=0)
         valid_size = np.round(VALIDATION_SIZE * len(images_path)).astype(np.int64)
 
-        indices_train, imgspath_train, act_train, rew_train, epis_train = sample_indices[:-valid_size], images_path[:-valid_size], actions[:-valid_size], rewards[:-valid_size], episode_starts[:-valid_size]
-        indices_val, imgspath_val, act_val, rew_val, epis_val           = sample_indices[-valid_size:], images_path[-valid_size:], actions[-valid_size:], rewards[-valid_size:], episode_starts[-valid_size:]
-        
+        # indices_train, imgspath_train, act_train, rew_train, epis_train = sample_indices[:-valid_size], images_path[:-valid_size], actions[:-valid_size], rewards[:-valid_size], episode_starts[:-valid_size]
+        # indices_val, imgspath_val, act_val, rew_val, epis_val           = sample_indices[-valid_size:], images_path[-valid_size:], actions[-valid_size:], rewards[-valid_size:], episode_starts[-valid_size:]
+        indices_train, indices_val = sample_indices[:-valid_size], sample_indices[-valid_size:]
         train_set = RobotEnvDataset(indices_train, images_path, actions, rewards, episode_starts, 
                                  is_training=True, img_shape=self.img_shape, multi_view=self.multi_view,
                                  use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
@@ -353,14 +353,11 @@ class SRL4robotics(BaseLearner):
         print("Train: {} minibatches, {} samples".format(len(dataloader_train), len(train_set)))
         print("Valid: {} minibatches, {} samples".format(len(dataloader_valid), len(valid_set)))
         # =======================================================================
-
-        dissimilar_pairs, same_actions_pairs = None, None
-        if not self.no_priors:
-            dissimilar_pairs, same_actions_pairs = findPriorsPairs(self.batch_size, minibatchlist, actions, rewards,
-                                                                   n_actions, n_pairs_per_action)
-
+        # dissimilar_pairs, same_actions_pairs = None, None
+        # if not self.no_priors:
+        #     dissimilar_pairs, same_actions_pairs = findPriorsPairs(self.batch_size, minibatchlist, actions, rewards,
+        #                                                            n_actions, n_pairs_per_action)
         # if self.use_vae and self.perceptual_similarity_loss and self.path_to_dae is not None:
-
         #     self.denoiser = SRLModules(state_dim=self.state_dim_dae, img_shape=self.img_shape, action_dim=self.dim_action,
         #                                model_type="custom_cnn",
         #                                cuda=self.cuda, losses=["dae"])
@@ -369,10 +366,9 @@ class SRL4robotics(BaseLearner):
         #     self.denoiser = self.denoiser.to(self.device)
         #     for param in self.denoiser.parameters():
         #         param.requires_grad = False
-
-        if self.episode_prior:
-            idx_to_episode = {idx: episode_idx for idx, episode_idx in enumerate(np.cumsum(episode_starts))}
-            minibatch_episodes = [[idx_to_episode[i] for i in minibatch] for minibatch in minibatchlist]
+        # if self.episode_prior:
+        #     idx_to_episode = {idx: episode_idx for idx, episode_idx in enumerate(np.cumsum(episode_starts))}
+        #     minibatch_episodes = [[idx_to_episode[i] for i in minibatch] for minibatch in minibatchlist]
 
         
         # TRAINING -----------------------------------------------------------------------------------------------------
@@ -397,12 +393,11 @@ class SRL4robotics(BaseLearner):
         
 
         for epoch in range(N_EPOCHS):
-            for valid_mode, dataloader in enumerate([dataloader_train, dataloader_valid]): ## [TODO: lisibility!]
-                # import ipdb; ipdb.set_trace()
+            for valid_mode, dataloader in enumerate([dataloader_train, dataloader_valid]): 
                 if monitor_mode == 'pbar':
                     pbar = tqdm(total=len(dataloader))
                 if self.model_type == 'gan':
-                    # GAN's training requires multi-optimizers, thus multiple loss_manger/epoch_loss/val_loss, etc.
+                    # GAN's training requires multi-optimizers, thus multiple loss_manager/epoch_loss/val_loss, etc.
                     epoch_loss_D, epoch_batches_D = 0, 0
                     epoch_loss_G, epoch_batches_G = 0, 0
                 epoch_loss, epoch_batches = 0, 0
@@ -414,7 +409,7 @@ class SRL4robotics(BaseLearner):
                     # with torch.no_grad():
                     self.prev_mode = torch.is_grad_enabled()
                     torch.set_grad_enabled(False)
-                    # torch._C.set_grad_enabled(False)
+                    # torch._C.set_grad_enabled(False) ??
                 else:
                     self.module.train()
                 
@@ -424,42 +419,34 @@ class SRL4robotics(BaseLearner):
                     #     noisy_obs = noisy_obs.to(self.device)
                     #     next_noisy_obs = next_noisy_obs.to(self.device)
                     
-                    if self.model_type == 'gan':
-                        # GAN's training requires multi-optimizers.
-                        self.optimizer_D.zero_grad()
-                        self.optimizer_G.zero_grad()
-                        self.optimizer_E.zero_grad()
-                        loss_manager.resetLosses()
-                        loss_manager_D.resetLosses()
-                        loss_manager_G.resetLosses()
-                    else:
-                        self.optimizer.zero_grad()
-                        loss_manager.resetLosses()
+                    # if self.model_type == 'gan':
+                    #     # GAN's training requires multi-optimizers.
+                    #     self.optimizer_D.zero_grad()
+                    #     self.optimizer_G.zero_grad()
+                    #     self.optimizer_E.zero_grad()
+                    #     loss_manager.resetLosses()
+                    #     loss_manager_D.resetLosses()
+                    #     loss_manager_G.resetLosses()
                     
-
-                    decoded_obs, decoded_next_obs = None, None
-                    states_denoiser = None
-                    states_denoiser_predicted = None
-                    next_states_denoiser = None
-                    next_states_denoiser_predicted = None
+                    ## It's extremely important to release loss tensor, otherwise it will cause 'memory leak".
+                    self.optimizer.zero_grad()
+                    loss_manager.resetLosses() 
 
                     # Predict states given observations as in Time Contrastive Network (Triplet Loss) [Sermanet et al.]
-                    if self.use_triplets:
-                        states, positive_states, negative_states = self.module.forwardTriplets(obs[:, :3:, :, :],
-                                                                                            obs[:, 3:6, :, :],
-                                                                                            obs[:, 6:, :, :])
+                    # if self.use_triplets:
+                    #     states, positive_states, negative_states = self.module.forwardTriplets(obs[:, :3:, :, :],
+                    #                                                                         obs[:, 3:6, :, :],
+                    #                                                                         obs[:, 6:, :, :])
 
-                        next_states, next_positive_states, next_negative_states = self.module.forwardTriplets(
-                            next_obs[:, :3:, :, :],
-                            next_obs[:, 3:6, :, :],
-                            next_obs[:, 6:, :, :])
+                    #     next_states, next_positive_states, next_negative_states = self.module.forwardTriplets(
+                    #         next_obs[:, :3:, :, :],
+                    #         next_obs[:, 3:6, :, :],
+                    #         next_obs[:, 6:, :, :])
                     # elif self.use_dae:
                     #     (states, decoded_obs), (next_states, decoded_next_obs) = \
                     #         self.module(noisy_obs), self.module(next_noisy_obs)
 
                     # elif self.use_vae:
-                    #     (decoded_obs, mu, logvar), (next_decoded_obs, next_mu, next_logvar) = self.module(obs), \
-                    #                                                                         self.module(next_obs)
                     #     states, next_states = self.module(obs), self.module(next_obs)
 
                     #     if self.perceptual_similarity_loss:
@@ -470,8 +457,9 @@ class SRL4robotics(BaseLearner):
 
                     #         (states_denoiser_predicted, decoded_obs_denoiser_predicted) = self.denoiser(decoded_obs)
                     #         (next_states_denoiser_predicted, decoded_next_obs_denoiser_predicted) = self.denoiser(next_decoded_obs)
-                    else:
-                        states, next_states = self.module(obs), self.module(next_obs)
+                    # else:
+                    #     states, next_states = self.module(obs), self.module(next_obs)
+                    
 
                     # Actions associated to the observations of the current minibatch
                     
@@ -500,16 +488,12 @@ class SRL4robotics(BaseLearner):
                                         weight=self.losses_weights_dict['priors'], loss_manager=loss_manager)
 
                     if self.use_forward_loss:
-                        next_states_pred = self.module.forwardModel(states, actions_st)
-                        forwardModelLoss(next_states_pred, next_states,
-                                        weight=self.losses_weights_dict['forward'],
-                                        loss_manager=loss_manager)
-
+                        states, next_states = self.module(obs), self.module(next_obs)
+                        self.module.add_forward_loss(states, actions_st, next_states, loss_manager)
                     if self.use_inverse_loss:
-                        actions_pred = self.module.inverseModel(states, next_states)
-                        inverseModelLoss(actions_pred, actions_st, weight=self.losses_weights_dict['inverse'],
-                                        loss_manager=loss_manager)
-
+                        states, next_states = self.module(obs), self.module(next_obs)
+                        self.module.add_inverse_loss(states, actions_st, next_states, loss_manager)
+                        
                     if self.use_reward_loss:
                         rewards_st = reward.copy()
                         # Removing negative reward
@@ -518,14 +502,7 @@ class SRL4robotics(BaseLearner):
                         rewards_pred = self.module.rewardModel(states, next_states)
                         rewardModelLoss(rewards_pred, rewards_st.long(), weight=self.losses_weights_dict['reward'],
                                         loss_manager=loss_manager)
-
-                    # if self.use_autoencoder or self.use_dae: ## NEW [TODO]
-                    #     loss_type = "dae" if self.use_dae else "autoencoder"
-                    #     autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs,
-                    #                     weight=self.losses_weights_dict[loss_type], loss_manager=loss_manager)
-
                     # if self.use_vae:
-                    #     kullbackLeiblerLoss(mu, next_mu, logvar, next_logvar, loss_manager=loss_manager, beta=self.beta)
                     #     if self.perceptual_similarity_loss:
                     #         perceptualSimilarityLoss(states_denoiser, states_denoiser_predicted, next_states_denoiser,
                     #                                 next_states_denoiser_predicted,

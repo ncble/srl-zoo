@@ -9,9 +9,11 @@ import numpy as np
 try:
     ## relative import: when executing as a package: python -m ...
     from ..losses.losses import autoEncoderLoss
+    from .base_trainer import BaseTrainer
 except:
     ## absolute import: when executing directly: python train.py ...
     from losses.losses import autoEncoderLoss
+    from models.base_trainer import BaseTrainer
 
 class LinearAutoEncoder(BaseModelAutoEncoder):
     """
@@ -139,7 +141,7 @@ class CNNAutoEncoder(BaseModelAutoEncoder):
         return self.decoder_conv(decoded)
 
 
-class AutoEncoderTrainer(nn.Module):  # BaseTrainer
+class AutoEncoderTrainer(nn.Module):
     def __init__(self, state_dim=2, img_shape=(3,224,224)):
         super().__init__()
         # BaseTrainer.__init__(self)
@@ -162,11 +164,11 @@ class AutoEncoderTrainer(nn.Module):  # BaseTrainer
             # LinearAutoEncoder.__init__(self, self.state_dim, np.prod(self.img_shape))
         else:
             raise NotImplementedError("model type: ({}) not supported yet.".format(model_type))
-        # self.model = CNNAutoEncoder(state_dim=self.state_dim, img_shape=self.img_shape)
+
 
     def train_on_batch(self, obs, next_obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
-        decoded_obs = self.model.decode(self.model(obs))
-        decoded_next_obs = self.model.decode(self.model(next_obs))
+        decoded_obs = self.reconstruct(obs)
+        decoded_next_obs = self.reconstruct(next_obs)
         autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs, weight=1.0, loss_manager=loss_manager)
         loss_manager.updateLossHistory()
         loss = loss_manager.computeTotalLoss()
@@ -176,6 +178,7 @@ class AutoEncoderTrainer(nn.Module):  # BaseTrainer
         else:
             pass
         loss = loss.item()
+        # loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
         # decoded_obs = self.decode(self(obs))
         # decoded_next_obs = self.decode(self(next_obs))

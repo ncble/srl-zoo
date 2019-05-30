@@ -3,19 +3,20 @@ from .vae import VAETrainer#CNNVAE, DenseVAE
 from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel
 from .priors import SRLConvolutionalNetwork, SRLDenseNetwork, SRLLinear
 from .triplet import EmbeddingNet
-from .models import *
 from .gan import Generator, Discriminator, Encoder, UNet
-# In case of importing into the SRL repository
 try:
-    from preprocessing.preprocess import N_CHANNELS
-# In case of importing material from modules.py into the external Robotics RL repository,
-# consider the relative path to the package
-except ImportError:
-    from ..preprocessing.preprocess import N_CHANNELS
-try:
-    from utils import printRed
-except ImportError:
+    ## relative import: when executing as a package: python -m ...
+    from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
+    from .base_trainer import BaseTrainer
     from ..utils import printRed
+    from ..preprocessing.preprocess import N_CHANNELS
+except:
+    ## absolute import: when executing directly: python train.py ...
+    from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
+    from models.base_trainer import BaseTrainer
+    from utils import printRed
+    from preprocessing.preprocess import N_CHANNELS
+
 
 class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
     def __init__(self, state_dim=2, img_shape=None, action_dim=6, cuda=False, model_type="custom_cnn", losses=None,
@@ -118,7 +119,14 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         negative : negative observations (th. Tensor)
         """
         return self.model(anchor), self.model(positive), self.model(negative)
+    
+    def add_forward_loss(self, states, actions_st, next_states, loss_manager):
+        next_states_pred = self.forwardModel(states, actions_st)
+        forwardModelLoss(next_states_pred, next_states, weight=1.0, loss_manager=loss_manager)
 
+    def add_inverse_loss(self, states, actions_st, next_states, loss_manager):
+        actions_pred = self.inverseModel(states, next_states)
+        inverseModelLoss(actions_pred, actions_st, weight=1.0, loss_manager=loss_manager)
 
 class SRLModulesSplit(BaseForwardModel, BaseInverseModel, BaseRewardModel):
     def __init__(self, state_dim=2, action_dim=6, cuda=False, model_type="custom_cnn",
