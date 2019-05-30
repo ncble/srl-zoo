@@ -5,9 +5,12 @@ from torchsummary import summary
 from .base_trainer import BaseTrainer
 import torch
 try:
+    ## relative import: when executing as a package: python -m ...
+    from ..losses.losses import autoEncoderLoss
+except:
+    ## absolute import: when executing directly: python train.py ...
     from losses.losses import autoEncoderLoss
-except ImportError:
-    from srl_zoo.losses.losses import autoEncoderLoss
+
 class LinearAutoEncoder(BaseModelAutoEncoder):
     """
     :param input_dim: (int)

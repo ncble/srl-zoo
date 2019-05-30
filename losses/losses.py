@@ -6,8 +6,13 @@ import numpy as np
 import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
+try:
+    ## absolute import
+    from models.priors import ReverseLayerF
+except:
+    ## relative import 
+    from ..models.priors import ReverseLayerF
 
-from models.priors import ReverseLayerF
 from .utils import correlationMatrix
 
 try:

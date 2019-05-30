@@ -14,8 +14,14 @@ import sys
 from collections import OrderedDict
 from pprint import pprint
 
-from utils import printRed, printGreen, printBlue, parseDataFolder, \
-    printYellow, createFolder
+try:
+    ## absolute import 
+    from utils import printRed, printGreen, printBlue, parseDataFolder, \
+        printYellow, createFolder
+except:
+    ## relative import 
+    from .utils import printRed, printGreen, printBlue, parseDataFolder, \
+        printYellow, createFolder
 
 # Fix for matplotlib non-zero return
 # Apparently due to segmentation fault
