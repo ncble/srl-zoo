@@ -5,8 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 
-from .custom_layers import GaussianNoiseVariant
-
 try:
     from preprocessing.preprocess import getNChannels
 except ImportError:
@@ -112,12 +110,12 @@ class BaseModelVAE(BaseModelAutoEncoder):
     def __init__(self):
         super(BaseModelVAE, self).__init__()
 
-    def getStates(self, observations):
-        """
-        :param observations: (th.Tensor)
-        :return: (th.Tensor)
-        """
-        return self.encode(observations)[0]
+    # def getStates(self, observations):
+    #     """
+    #     :param observations: (th.Tensor)
+    #     :return: (th.Tensor)
+    #     """
+    #     return self.encode(observations)[0]
 
     def encode(self, x):
         """
@@ -158,6 +156,8 @@ class BaseModelVAE(BaseModelAutoEncoder):
         :param x: (th.Tensor)
         :return: (th.Tensor)
         """
+        return self.encode(x)[0]
+    def compute_tensors(self, x):
         input_shape = x.size()
         mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
@@ -196,8 +196,8 @@ class CustomCNN(BaseModelSRL):
         )
         
         outshape = summary(self.conv_layers, img_shape, show=False) # [-1, channels, high, width]
-        self.img_high, self.img_width = outshape[-2:]
-        self.fc = nn.Linear(self.img_high * self.img_width * 64, state_dim)
+        self.img_height, self.img_width = outshape[-2:]
+        self.fc = nn.Linear(self.img_height * self.img_width * 64, state_dim)
 
     def forward(self, x):
         x = self.conv_layers(x)
@@ -234,3 +234,49 @@ if __name__ == "__main__":
     model = CustomCNN(state_dim=2, img_shape=img_shape)
     A = summary(model, img_shape)
     
+
+class GaussianNoise(nn.Module):
+    """
+    Gaussian Noise layer
+    :param batch_size: (int)
+    :param input_dim: (int)
+    :param std: (float) standard deviation
+    :param mean: (float)
+    :param device: (pytorch device)
+    """
+
+    def __init__(self, batch_size, input_dim, device, std, mean=0):
+        super(GaussianNoise, self).__init__()
+        self.std = std
+        self.mean = mean
+        self.device = device
+        self.noise = th.zeros(batch_size, input_dim, device=self.device)
+
+    def forward(self, x):
+        if self.training:
+            self.noise.data.normal_(self.mean, std=self.std)
+            return x + self.noise
+        return x
+
+
+class GaussianNoiseVariant(nn.Module):
+    """
+    Variant of the Gaussian Noise layer that does not require fixed batch_size
+    It recreates a tensor at each call
+    :param device: (pytorch device)
+    :param std: (float) standard deviation
+    :param mean: (float)
+    """
+
+    def __init__(self, device, std, mean=0):
+        super(GaussianNoiseVariant, self).__init__()
+        self.std = std
+        self.mean = mean
+        self.device = device
+
+    def forward(self, x):
+        if self.training:
+            noise = th.zeros(x.size(), device=self.device)
+            noise.data.normal_(self.mean, std=self.std)
+            return x + noise
+        return x

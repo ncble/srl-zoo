@@ -59,10 +59,10 @@ def preprocessImage(image, img_reshape=None, convert_to_rgb=True, apply_occlusio
     # Normalize
     im = preprocessInput(im.astype(np.float32))
 
-    img_high, img_width = img_reshape[1:]
+    img_height, img_width = img_reshape[1:]
     if apply_occlusion:
-        h_1 = np.random.randint(img_high)
-        h_1, h_2 = sample_coordinates(h_1, img_high, percentage=occlusion_percentage)
+        h_1 = np.random.randint(img_height)
+        h_1, h_2 = sample_coordinates(h_1, img_height, percentage=occlusion_percentage)
         w_1 = np.random.randint(img_width)
         w_1, w_2 = sample_coordinates(w_1, img_width, percentage=occlusion_percentage)
         noisy_img = im

@@ -1,5 +1,5 @@
-from .autoencoders import CNNAutoEncoder, DenseAutoEncoder, LinearAutoEncoder, CNNAETrainer
-from .vae import CNNVAE, DenseVAE
+from .autoencoders import AutoEncoderTrainer
+from .vae import VAETrainer#CNNVAE, DenseVAE
 from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel
 from .priors import SRLConvolutionalNetwork, SRLDenseNetwork, SRLLinear
 from .triplet import EmbeddingNet
@@ -53,46 +53,51 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         def getInputDim():
             return np.prod(self.img_shape)
         # Architecture
-        if model_type == "custom_cnn":
-            if "autoencoder" in losses or "dae" in losses:
-                # self.model = CNNAutoEncoder(state_dim, img_shape=self.img_shape)
-                self.model = CNNAETrainer(state_dim, img_shape=self.img_shape)
-                self.model.build_model()
-            elif "vae" in losses:
-                self.model = CNNVAE(state_dim, img_shape=self.img_shape)
-            else:
-                # for losses not depending on specific architecture (supervised, inv, fwd..)
-                self.model = CustomCNN(state_dim, img_shape=self.img_shape)
+        if "autoencoder" in losses or "dae" in losses:
+            self.model = AutoEncoderTrainer(state_dim=state_dim, img_shape=self.img_shape)
+            self.model.build_model(model_type=model_type)
+        elif "vae" in losses:
+            self.model = VAETrainer(state_dim=state_dim, img_shape=self.img_shape)
+            self.model.build_model(model_type=model_type)
+            
+        # if model_type == "custom_cnn":
+        #     if "autoencoder" in losses or "dae" in losses:
+        #         self.model = CNNAutoEncoder(state_dim, img_shape=self.img_shape)
+        #     elif "vae" in losses:
+        #         self.model = CNNVAE(state_dim, img_shape=self.img_shape)
+        #     else:
+        #         # for losses not depending on specific architecture (supervised, inv, fwd..)
+        #         self.model = CustomCNN(state_dim, img_shape=self.img_shape)
 
-        elif model_type == "mlp":
-            if "autoencoder" in losses or "dae" in losses:
-                self.model = DenseAutoEncoder(input_dim=getInputDim(), state_dim=state_dim)
-            elif "vae" in losses:
-                self.model = DenseVAE(input_dim=getInputDim(),
-                                      state_dim=state_dim)
-            else:
-                # for losses not depending on specific architecture (supervised, inv, fwd..)
-                self.model = SRLDenseNetwork(getInputDim(), state_dim, cuda=cuda)
+        # elif model_type == "mlp":
+        #     if "autoencoder" in losses or "dae" in losses:
+        #         self.model = DenseAutoEncoder(input_dim=getInputDim(), state_dim=state_dim)
+        #     elif "vae" in losses:
+        #         self.model = DenseVAE(input_dim=getInputDim(),
+        #                               state_dim=state_dim)
+        #     else:
+        #         # for losses not depending on specific architecture (supervised, inv, fwd..)
+        #         self.model = SRLDenseNetwork(getInputDim(), state_dim, cuda=cuda)
 
-        elif model_type == "linear":
-            if "autoencoder" in losses or "dae" in losses:
-                self.model = LinearAutoEncoder(input_dim=getInputDim(), state_dim=state_dim)
-            else:
-                # for losses not depending on specific architecture (supervised, inv, fwd..)
-                self.model = SRLLinear(input_dim=getInputDim(), state_dim=state_dim, cuda=cuda)
+        # elif model_type == "linear":
+        #     if "autoencoder" in losses or "dae" in losses:
+        #         self.model = LinearAutoEncoder(input_dim=getInputDim(), state_dim=state_dim)
+        #     else:
+        #         # for losses not depending on specific architecture (supervised, inv, fwd..)
+        #         self.model = SRLLinear(input_dim=getInputDim(), state_dim=state_dim, cuda=cuda)
 
-        elif model_type == "resnet":
-            self.model = SRLConvolutionalNetwork(state_dim, cuda)
-        elif model_type == "gan":
-            self.model = Encoder(self.img_shape, state_dim, spectral_norm=False)
-            self.generator = Generator(self.img_shape, state_dim, spectral_norm=True)
-            self.discriminator = Discriminator(self.img_shape, state_dim, spectral_norm=True)
+        # elif model_type == "resnet":
+        #     self.model = SRLConvolutionalNetwork(state_dim, cuda)
+        # elif model_type == "gan":
+        #     self.model = Encoder(self.img_shape, state_dim, spectral_norm=False)
+        #     self.generator = Generator(self.img_shape, state_dim, spectral_norm=True)
+        #     self.discriminator = Discriminator(self.img_shape, state_dim, spectral_norm=True)
         
-        # elif: [Add new model here !]
+        # # elif: [Add new model here !]
 
-        if losses is not None and "triplet" in losses:
-            # pretrained resnet18 with fixed weights
-            self.model = EmbeddingNet(state_dim)
+        # if losses is not None and "triplet" in losses:
+        #     # pretrained resnet18 with fixed weights
+        #     self.model = EmbeddingNet(state_dim)
 
     def forward(self, x):
         if self.model_type == 'linear' or self.model_type == 'mlp':

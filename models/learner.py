@@ -60,6 +60,7 @@ class BaseLearner(object):
         self.module = None
         self.seed = seed
         self.use_dae = False
+        assert not self.use_dae, "Not implemented error."
         # Seed the random generator
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -237,8 +238,8 @@ class SRL4robotics(BaseLearner):
         if losses_weights_dict is not None:
             self.losses_weights_dict.update(losses_weights_dict)
 
-        if self.use_dae and self.occlusion_percentage is not None:
-            print("Using a maximum occlusion surface of {}".format(str(self.occlusion_percentage)))
+        # if self.use_dae and self.occlusion_percentage is not None:
+        #     print("Using a maximum occlusion surface of {}".format(str(self.occlusion_percentage)))
 
     @staticmethod
     def loadSavedModel(log_folder, valid_models, cuda=True, img_shape=None):
@@ -358,16 +359,16 @@ class SRL4robotics(BaseLearner):
             dissimilar_pairs, same_actions_pairs = findPriorsPairs(self.batch_size, minibatchlist, actions, rewards,
                                                                    n_actions, n_pairs_per_action)
 
-        if self.use_vae and self.perceptual_similarity_loss and self.path_to_dae is not None:
+        # if self.use_vae and self.perceptual_similarity_loss and self.path_to_dae is not None:
 
-            self.denoiser = SRLModules(state_dim=self.state_dim_dae, img_shape=self.img_shape, action_dim=self.dim_action,
-                                       model_type="custom_cnn",
-                                       cuda=self.cuda, losses=["dae"])
-            self.denoiser.load_state_dict(torch.load(self.path_to_dae))
-            self.denoiser.eval()
-            self.denoiser = self.denoiser.to(self.device)
-            for param in self.denoiser.parameters():
-                param.requires_grad = False
+        #     self.denoiser = SRLModules(state_dim=self.state_dim_dae, img_shape=self.img_shape, action_dim=self.dim_action,
+        #                                model_type="custom_cnn",
+        #                                cuda=self.cuda, losses=["dae"])
+        #     self.denoiser.load_state_dict(torch.load(self.path_to_dae))
+        #     self.denoiser.eval()
+        #     self.denoiser = self.denoiser.to(self.device)
+        #     for param in self.denoiser.parameters():
+        #         param.requires_grad = False
 
         if self.episode_prior:
             idx_to_episode = {idx: episode_idx for idx, episode_idx in enumerate(np.cumsum(episode_starts))}
@@ -419,9 +420,9 @@ class SRL4robotics(BaseLearner):
                 
                 for iter_ind, (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) in enumerate(dataloader):
                     obs, next_obs = obs.to(self.device), next_obs.to(self.device)
-                    if self.use_dae:
-                        noisy_obs = noisy_obs.to(self.device)
-                        next_noisy_obs = next_noisy_obs.to(self.device)
+                    # if self.use_dae:
+                    #     noisy_obs = noisy_obs.to(self.device)
+                    #     next_noisy_obs = next_noisy_obs.to(self.device)
                     
                     if self.model_type == 'gan':
                         # GAN's training requires multi-optimizers.
@@ -452,23 +453,23 @@ class SRL4robotics(BaseLearner):
                             next_obs[:, :3:, :, :],
                             next_obs[:, 3:6, :, :],
                             next_obs[:, 6:, :, :])
-                    elif self.use_dae:
-                        (states, decoded_obs), (next_states, decoded_next_obs) = \
-                            self.module(noisy_obs), self.module(next_noisy_obs)
+                    # elif self.use_dae:
+                    #     (states, decoded_obs), (next_states, decoded_next_obs) = \
+                    #         self.module(noisy_obs), self.module(next_noisy_obs)
 
-                    elif self.use_vae:
-                        (decoded_obs, mu, logvar), (next_decoded_obs, next_mu, next_logvar) = self.module(obs), \
-                                                                                            self.module(next_obs)
-                        states, next_states = self.module(obs), self.module(next_obs)
+                    # elif self.use_vae:
+                    #     (decoded_obs, mu, logvar), (next_decoded_obs, next_mu, next_logvar) = self.module(obs), \
+                    #                                                                         self.module(next_obs)
+                    #     states, next_states = self.module(obs), self.module(next_obs)
 
-                        if self.perceptual_similarity_loss:
-                            # Predictions for the perceptual similarity loss as in DARLA
-                            # https://arxiv.org/pdf/1707.08475.pdf
-                            (states_denoiser, decoded_obs_denoiser), (next_states_denoiser, decoded_next_obs_denoiser) = \
-                                self.denoiser(obs), self.denoiser(next_obs)
+                    #     if self.perceptual_similarity_loss:
+                    #         # Predictions for the perceptual similarity loss as in DARLA
+                    #         # https://arxiv.org/pdf/1707.08475.pdf
+                    #         (states_denoiser, decoded_obs_denoiser), (next_states_denoiser, decoded_next_obs_denoiser) = \
+                    #             self.denoiser(obs), self.denoiser(next_obs)
 
-                            (states_denoiser_predicted, decoded_obs_denoiser_predicted) = self.denoiser(decoded_obs)
-                            (next_states_denoiser_predicted, decoded_next_obs_denoiser_predicted) = self.denoiser(next_decoded_obs)
+                    #         (states_denoiser_predicted, decoded_obs_denoiser_predicted) = self.denoiser(decoded_obs)
+                    #         (next_states_denoiser_predicted, decoded_next_obs_denoiser_predicted) = self.denoiser(next_decoded_obs)
                     else:
                         states, next_states = self.module(obs), self.module(next_obs)
 
@@ -523,18 +524,16 @@ class SRL4robotics(BaseLearner):
                     #     autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs,
                     #                     weight=self.losses_weights_dict[loss_type], loss_manager=loss_manager)
 
-                    if self.use_vae:
-
-                        kullbackLeiblerLoss(mu, next_mu, logvar, next_logvar, loss_manager=loss_manager, beta=self.beta)
-
-                        if self.perceptual_similarity_loss:
-                            perceptualSimilarityLoss(states_denoiser, states_denoiser_predicted, next_states_denoiser,
-                                                    next_states_denoiser_predicted,
-                                                    weight=self.losses_weights_dict['perceptual'],
-                                                    loss_manager=loss_manager)
-                        else:
-                            generationLoss(decoded_obs, next_decoded_obs, obs, next_obs,
-                                        weight=self.losses_weights_dict['vae'], loss_manager=loss_manager)
+                    # if self.use_vae:
+                    #     kullbackLeiblerLoss(mu, next_mu, logvar, next_logvar, loss_manager=loss_manager, beta=self.beta)
+                    #     if self.perceptual_similarity_loss:
+                    #         perceptualSimilarityLoss(states_denoiser, states_denoiser_predicted, next_states_denoiser,
+                    #                                 next_states_denoiser_predicted,
+                    #                                 weight=self.losses_weights_dict['perceptual'],
+                    #                                 loss_manager=loss_manager)
+                    #     else:
+                    #         generationLoss(decoded_obs, next_decoded_obs, obs, next_obs,
+                    #                     weight=self.losses_weights_dict['vae'], loss_manager=loss_manager)
 
                     if self.reward_prior:
                         # rewards_st = rewar[minibatch_idx]]
@@ -702,12 +701,13 @@ class SRL4robotics(BaseLearner):
                         if self.use_autoencoder or self.use_vae or self.use_dae:
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB
-                                decoded_obs = self.module.model.model.decode(self.module.model(obs)) ## NEW [TODO]
+                                # decoded_obs = self.module.model.decode(self.module.model.encode(obs)) ## NEW [TODO]
+                                decoded_obs = self.module.model.reconstruct(obs) ## NEW [TODO]
                                 images = make_grid([obs[0], decoded_obs[0], obs[1], decoded_obs[1]], nrow=2) # , normalize=True, range=(0,1)
                                 plotImage(deNormalize(detachToNumpy(images)), mode='cv2', save2dir=figdir_recon, index=epoch+1)
-                                if self.use_dae:
-                                    raise NotImplementedError
-                                    plotImage(deNormalize(detachToNumpy(noisy_obs[0])), "Noisy Input Image (Train)")
+                                # if self.use_dae:
+                                #     raise NotImplementedError
+                                #     plotImage(deNormalize(detachToNumpy(noisy_obs[0])), "Noisy Input Image (Train)")
                                 if self.perceptual_similarity_loss:
                                     raise NotImplementedError
                                     plotImage(deNormalize(detachToNumpy(decoded_obs_denoiser[0])),
@@ -721,9 +721,9 @@ class SRL4robotics(BaseLearner):
                                 for k in range(obs[0].shape[0] // 3):
                                     plotImage(deNormalize(detachToNumpy(obs[0][k * 3:(k + 1) * 3, :, :])),
                                               "Input Image {} (Train)".format(k + 1))
-                                    if self.use_dae:
-                                        plotImage(deNormalize(detachToNumpy(noisy_obs[0][k * 3:(k + 1) * 3, :, :])),
-                                                  "Noisy Input Image (Train)".format(k + 1))
+                                    # if self.use_dae:
+                                    #     plotImage(deNormalize(detachToNumpy(noisy_obs[0][k * 3:(k + 1) * 3, :, :])),
+                                    #               "Noisy Input Image (Train)".format(k + 1))
                                     if self.perceptual_similarity_loss:
                                         plotImage(deNormalize(
                                             detachToNumpy(decoded_obs_denoiser[0][k * 3:(k + 1) * 3, :, :])),
