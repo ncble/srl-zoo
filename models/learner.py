@@ -310,13 +310,15 @@ class SRL4robotics(BaseLearner):
         data_loader_params = {'batch_size': self.batch_size,
                   'shuffle': True,
                   'num_workers': N_WORKERS,
-                  'pin_memory': False,
-                  'drop_last': True}
+                #   'drop_last': True,
+                  'pin_memory': False
+                  }
         data_loader_params_test = {'batch_size': 128,
                   'shuffle': False,
                   'num_workers': N_WORKERS,
-                  'pin_memory': False,
-                  'drop_last': True}
+                #   'drop_last': True,
+                  'pin_memory': False
+                  }
         sample_indices = np.arange(len(images_path))
         ## Shuffle datasets
         sample_indices, images_path, actions, rewards, episode_starts = sk_shuffle(sample_indices, images_path, actions, rewards, episode_starts, random_state=0)
@@ -503,8 +505,7 @@ class SRL4robotics(BaseLearner):
                     #     tripletLoss(states, positive_states, negative_states, weight=self.losses_weights_dict['triplet'],
                     #                 loss_manager=loss_manager, alpha=0.2)
                     if self.model_type == 'gan':
-                        label_valid = torch.ones((obs.size(0), 1)).to(self.device)
-                        label_fake = torch.zeros((obs.size(0), 1)).to(self.device)
+                        
                         # GAN's training requires multi-optimizers.
                         # === Train the Discriminator ===
                         for _ in range(1):
@@ -512,6 +513,8 @@ class SRL4robotics(BaseLearner):
                             loss_manager_D.resetLosses()
                             (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
                             obs = obs.to(self.device)
+                            label_valid = torch.ones((obs.size(0), 1)).to(self.device)
+                            label_fake = torch.zeros((obs.size(0), 1)).to(self.device)
                             d_loss = self.module.model.train_on_batch_D(obs, label_valid, label_fake, self.optimizer_D, loss_manager_D, valid_mode=valid_mode, device=self.device)
                             epoch_loss_D += d_loss
                             epoch_batches_D += 1
@@ -521,6 +524,7 @@ class SRL4robotics(BaseLearner):
                             loss_manager_G.resetLosses()
                             (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
                             obs = obs.to(self.device)
+                            label_valid = torch.ones((obs.size(0), 1)).to(self.device)
                             g_loss = self.module.model.train_on_batch_G(obs, label_valid, self.optimizer_G, loss_manager_G, valid_mode=valid_mode, device=self.device)
                             epoch_loss_G += g_loss
                             epoch_batches_G += 1
