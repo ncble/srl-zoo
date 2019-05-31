@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from .models import BaseModelAutoEncoder
 from torchsummary import summary
-from .base_trainer import BaseTrainer
 import torch
 import torch.nn as nn
 import numpy as np
@@ -141,7 +140,7 @@ class CNNAutoEncoder(BaseModelAutoEncoder):
         return self.decoder_conv(decoded)
 
 
-class AutoEncoderTrainer(nn.Module):
+class AutoEncoderTrainer(BaseTrainer):
     def __init__(self, state_dim=2, img_shape=(3,224,224)):
         super().__init__()
         # BaseTrainer.__init__(self)
@@ -170,29 +169,9 @@ class AutoEncoderTrainer(nn.Module):
         decoded_obs = self.reconstruct(obs)
         decoded_next_obs = self.reconstruct(next_obs)
         autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs, weight=1.0, loss_manager=loss_manager)
-        loss_manager.updateLossHistory()
-        loss = loss_manager.computeTotalLoss()
-        if not valid_mode:
-            loss.backward()
-            optimizer.step()
-        else:
-            pass
-        loss = loss.item()
-        # loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
+        loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
-        # decoded_obs = self.decode(self(obs))
-        # decoded_next_obs = self.decode(self(next_obs))
-        # autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs,
-        #                 weight=1.0, loss_manager=loss_manager)
-        # loss_manager.updateLossHistory()
-        # loss = loss_manager.computeTotalLoss()
-        # if not valid_mode:
-        #     loss.backward()
-        #     optimizer.step()
-        # else:
-        #     pass
-        # loss = loss.item()
-        # return loss
+
     def reconstruct(self, x):
         return self.model.decode(self.model.encode(x))
     def encode(self, x):

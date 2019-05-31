@@ -415,6 +415,7 @@ class SRL4robotics(BaseLearner):
                 
                 for iter_ind, (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) in enumerate(dataloader):
                     obs, next_obs = obs.to(self.device), next_obs.to(self.device)
+                    import ipdb; ipdb.set_trace()
                     # if self.use_dae:
                     #     noisy_obs = noisy_obs.to(self.device)
                     #     next_noisy_obs = next_noisy_obs.to(self.device)
@@ -460,10 +461,6 @@ class SRL4robotics(BaseLearner):
                     # else:
                     #     states, next_states = self.module(obs), self.module(next_obs)
                     
-
-                    # Actions associated to the observations of the current minibatch
-                    
-                    actions_st = action.view(-1, 1).to(self.device)
                     # L1 regularization
                     if self.losses_weights_dict['l1_reg'] > 0:
                         l1Loss(loss_manager.reg_params,
@@ -482,26 +479,25 @@ class SRL4robotics(BaseLearner):
                         l2Loss(loss_manager_G.reg_params,
                             self.losses_weights_dict['l2_reg'], loss_manager_G)
 
-                    if not self.no_priors:
-                        roboticPriorsLoss(states, next_states, minibatch_idx=minibatch_idx,
-                                        dissimilar_pairs=dissimilar_pairs, same_actions_pairs=same_actions_pairs,
-                                        weight=self.losses_weights_dict['priors'], loss_manager=loss_manager)
-
+                    # if not self.no_priors:
+                    #     roboticPriorsLoss(states, next_states, minibatch_idx=minibatch_idx,
+                    #                     dissimilar_pairs=dissimilar_pairs, same_actions_pairs=same_actions_pairs,
+                    #                     weight=self.losses_weights_dict['priors'], loss_manager=loss_manager)
+                    # Actions associated to the observations
+                    actions_st = action.view(-1, 1).to(self.device)
                     if self.use_forward_loss:
                         states, next_states = self.module(obs), self.module(next_obs)
+                        
                         self.module.add_forward_loss(states, actions_st, next_states, loss_manager)
                     if self.use_inverse_loss:
                         states, next_states = self.module(obs), self.module(next_obs)
                         self.module.add_inverse_loss(states, actions_st, next_states, loss_manager)
-                        
                     if self.use_reward_loss:
                         rewards_st = reward.copy()
                         # Removing negative reward
                         rewards_st[rewards_st == -1] = 0
-                        rewards_st = torch.from_numpy(rewards_st).to(self.device)
-                        rewards_pred = self.module.rewardModel(states, next_states)
-                        rewardModelLoss(rewards_pred, rewards_st.long(), weight=self.losses_weights_dict['reward'],
-                                        loss_manager=loss_manager)
+                        rewards_st = torch.from_numpy(rewards_st.astype(np.float32)).to(self.device) ## [TODO: check dtype]
+                        self.module.add_reward_loss(states, rewards_st, next_states, loss_manager)
                     # if self.use_vae:
                     #     if self.perceptual_similarity_loss:
                     #         perceptualSimilarityLoss(states_denoiser, states_denoiser_predicted, next_states_denoiser,
@@ -511,21 +507,18 @@ class SRL4robotics(BaseLearner):
                     #     else:
                     #         generationLoss(decoded_obs, next_decoded_obs, obs, next_obs,
                     #                     weight=self.losses_weights_dict['vae'], loss_manager=loss_manager)
-
-                    if self.reward_prior:
-                        # rewards_st = rewar[minibatch_idx]]
-                        rewards_st = reward
-                        rewards_st = torch.from_numpy(rewards_st).float().view(-1, 1).to(self.device)
-                        rewardPriorLoss(states, rewards_st, weight=self.losses_weights_dict['reward-prior'],
-                                        loss_manager=loss_manager)
-
-                    if self.episode_prior:
-                        episodePriorLoss(minibatch_idx, minibatch_episodes, states, self.prior_discriminator,
-                                        BALANCED_SAMPLING, weight=self.losses_weights_dict['episode-prior'],
-                                        loss_manager=loss_manager)
-                    if self.use_triplets:
-                        tripletLoss(states, positive_states, negative_states, weight=self.losses_weights_dict['triplet'],
-                                    loss_manager=loss_manager, alpha=0.2)
+                    # if self.reward_prior:
+                    #     rewards_st = reward
+                    #     rewards_st = torch.from_numpy(rewards_st).float().view(-1, 1).to(self.device)
+                    #     rewardPriorLoss(states, rewards_st, weight=self.losses_weights_dict['reward-prior'],
+                    #                     loss_manager=loss_manager)
+                    # if self.episode_prior:
+                    #     episodePriorLoss(minibatch_idx, minibatch_episodes, states, self.prior_discriminator,
+                    #                     BALANCED_SAMPLING, weight=self.losses_weights_dict['episode-prior'],
+                    #                     loss_manager=loss_manager)
+                    # if self.use_triplets:
+                    #     tripletLoss(states, positive_states, negative_states, weight=self.losses_weights_dict['triplet'],
+                    #                 loss_manager=loss_manager, alpha=0.2)
                     """
                     if self.model_type == 'gan':
                         label_valid = torch.ones((obs.size(0), 1)).to(self.device)
@@ -584,31 +577,20 @@ class SRL4robotics(BaseLearner):
                         autoEncoderLoss(obs, reconstruct_obs, next_obs, reconstruct_obs_next, 10000.0, loss_manager)
                         ##############################
                     """
-                    ##### TEST NEW Training mechanism [TODO]
+                    
+                    # Compute weighted average of losses of encoder part (including 'forward'/'inverse'/'reward' models)
                     loss = self.module.model.train_on_batch(
                         obs, next_obs, self.optimizer, loss_manager, valid_mode=valid_mode, device=self.device)
-                    # Compute weighted average of losses of encoder part (including 'forward'/'inverse'/'reward' models)
-                    ####  ------------- NEW [TODO] -------------
-                    # loss_manager.updateLossHistory()
-                    # loss = loss_manager.computeTotalLoss()
-                    # if valid_mode:
-                    #     # Only forward pass in the validation mode.
-                    #     # DO NOT waste time to backpropagate i.e. loss.backward() !
-                    #     pass
-                    # else:
-                    #     # Backpropagate loss and update ('optimizer.step()') weights.
-                    #     loss.backward()
-                    #     if self.model_type == 'gan':
-                    #         self.optimizer_E.step()
-                    #     else:
-                    #         self.optimizer.step()
-                    # epoch_loss += loss.item()
+                    
+
                     epoch_loss += loss ## NEW [TODO]
                     epoch_batches += 1
 
                     if not valid_mode:
+                        # mean training loss so far
                         train_loss = epoch_loss / float(epoch_batches)
                     else:
+                        # mean validation loss so far
                         val_loss = epoch_loss / float(epoch_batches)
                     
                     if monitor_mode == 'loss':
@@ -711,9 +693,7 @@ class SRL4robotics(BaseLearner):
                                     plotImage(deNormalize(detachToNumpy(decoded_obs[0][k * 3:(k + 1) * 3, :, :])),
                                               "Reconstructed Image {}".format(k + 1))
 
-        # if SAVE_PLOTS:
-            # plt.close("Learned State Representation (Training Data)")
-            # plt.close("all")
+
 
         # Load best model before predicting states
         self.module.load_state_dict(torch.load(best_model_path))

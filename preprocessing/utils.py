@@ -19,15 +19,8 @@ def preprocessInput(x, mode="tf"):
     assert x.shape[-1] == 3, "Color channel must be at the end of the tensor {}".format(x.shape)
     x /= 255.
     if mode == "tf":
-        # x -= 0.5
-        # x *= 2.
-        ## The following code is 33% faster than above one.
-        x[..., 0] -= 0.5
-        x[..., 1] -= 0.5
-        x[..., 2] -= 0.5
-        x[..., 0] *= 2.
-        x[..., 1] *= 2.
-        x[..., 2] *= 2.
+        x -= 0.5
+        x *= 2.
     elif mode == "image_net":
         # Zero-center by mean pixel
         x[..., 0] -= 0.485

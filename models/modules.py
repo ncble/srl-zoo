@@ -60,12 +60,11 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         elif "vae" in losses:
             self.model = VAETrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type)
+        
             
         # if model_type == "custom_cnn":
         #     if "autoencoder" in losses or "dae" in losses:
         #         self.model = CNNAutoEncoder(state_dim, img_shape=self.img_shape)
-        #     elif "vae" in losses:
-        #         self.model = CNNVAE(state_dim, img_shape=self.img_shape)
         #     else:
         #         # for losses not depending on specific architecture (supervised, inv, fwd..)
         #         self.model = CustomCNN(state_dim, img_shape=self.img_shape)
@@ -127,6 +126,10 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
     def add_inverse_loss(self, states, actions_st, next_states, loss_manager):
         actions_pred = self.inverseModel(states, next_states)
         inverseModelLoss(actions_pred, actions_st, weight=1.0, loss_manager=loss_manager)
+
+    def add_reward_loss(self, states, rewards_st, next_states, loss_manager):
+        rewards_pred = self.rewardModel(states, next_states)
+        rewardModelLoss(rewards_pred, rewards_st, weight=1.0, loss_manager=loss_manager)
 
 class SRLModulesSplit(BaseForwardModel, BaseInverseModel, BaseRewardModel):
     def __init__(self, state_dim=2, action_dim=6, cuda=False, model_type="custom_cnn",
