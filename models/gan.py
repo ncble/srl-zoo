@@ -13,10 +13,12 @@ try:
     # relative import
     from .models import BaseModelSRL
     from .base_trainer import BaseTrainer
+    from ..losses.losses import ganNonSaturateLoss, autoEncoderLoss
 except:
     from models.models import BaseModelSRL
     from models.base_trainer import BaseTrainer
-
+    from losses.losses import ganNonSaturateLoss, autoEncoderLoss
+    
 def ConvSN2d(in_channels, out_channels, kernel_size,
              stride=1,
              padding=0,
@@ -458,41 +460,31 @@ class GANTrainer(BaseTrainer):
 
         """
         ## Compute loss tensor (add to the previous losses cumulated in loss_manager)
-        state_pred = self.encoder(obs)
-        reconstruct_obs = self.generator(state_pred)
-        state_pred_next = self.encoder(next_obs)
-        reconstruct_obs_next = self.generator(state_pred_next)
+        # state_pred, state_pred_next = self.encoder(obs), self.encoder(next_obs)
+        # reconstruct_obs, reconstruct_obs_next = self.generator(state_pred), self.generator(state_pred_next)
+        reconstruct_obs, reconstruct_obs_next = self.reconstruct(obs), self.reconstruct(next_obs)
         autoEncoderLoss(obs, reconstruct_obs, next_obs, reconstruct_obs_next, 10000.0, loss_manager)
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
-    def train_on_batch_D(self, obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
-        label_valid = torch.ones((obs.size(0), 1)).to(device)
-        label_fake = torch.zeros((obs.size(0), 1)).to(device)
-        sample_state = torch.randn((obs.size(0), self.state_dim),
-                                    requires_grad=False).to(device)
+    def train_on_batch_D(self, obs, label_valid, label_fake, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
+        sample_state = torch.randn((obs.size(0), self.state_dim), requires_grad=False).to(device)
         fake_img = self.generator(sample_state)
         # fake_loss 
-        ganNonSaturateLoss(self.model.discriminator(fake_img.detach()), label_fake, weight=1.0, loss_manager=loss_manager, name="ns_loss_D_fake")
+        ganNonSaturateLoss(self.discriminator(fake_img.detach()), label_fake, weight=1.0, loss_manager=loss_manager, name="ns_loss_D_fake")
         # real_loss
-        ganNonSaturateLoss(self.model.discriminator(obs), label_valid, weight=1.0, loss_manager=loss_manager, name="ns_loss_D_real")
+        ganNonSaturateLoss(self.discriminator(obs), label_valid, weight=1.0, loss_manager=loss_manager, name="ns_loss_D_real")
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
-
-    def train_on_batch_G(self, obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
-        sample_state = torch.randn((obs.size(0), self.state_dim),
-                        requires_grad=False).to(device)
-        fake_img = self.model.generator(sample_state)
-        fake_rating = self.model.discriminator(fake_img)
+    def train_on_batch_G(self, obs, label_valid, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
+        sample_state = torch.randn((obs.size(0), self.state_dim), requires_grad=False).to(device)
+        fake_img = self.generator(sample_state)
+        fake_rating = self.discriminator(fake_img)
         ganNonSaturateLoss(fake_rating, label_valid, weight=1.0, loss_manager=loss_manager, name="ns_loss_G")
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
-    
-    def train_on_batch(self, obs, next_obs, optimizers, loss_managers, valid_mode=False, device=torch.device('cpu')):
-        raise NotImplementedError
-        self.train_on_batch_E(obs, next_obs, optimizers[0], loss_managers[0], valid_mode=valid_mode, device=device)
-        self.train_on_batch_D(obs, optimizers[1], loss_managers[1], valid_mode=valid_mode, device=device)
-        self.train_on_batch_G(obs, optimizers[2], loss_managers[2], valid_mode=valid_mode, device=device)
-        return 
+    def reconstruct(self, x):
+        return self.generator(self.encoder(x))
+
 
 
 

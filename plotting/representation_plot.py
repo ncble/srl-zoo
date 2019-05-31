@@ -7,7 +7,6 @@ from textwrap import fill
 
 import matplotlib.pyplot as plt
 from matplotlib import cm, colors
-import seaborn as sns
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
@@ -15,14 +14,15 @@ from sklearn.decomposition import PCA
 from utils import parseDataFolder, getInputBuiltin, loadData
 from time import time
 import cv2
+# import seaborn as sns
 # Init seaborn
-sns.set()
+# sns.set()
 TITLE_MAX_LENGTH = 50
 
 
 
 def plotRepresentation(states, rewards, name="Learned State Representation",
-                       add_colorbar=True, path=None, fit_pca=False, cmap='coolwarm', true_states=None):
+                       add_colorbar=True, path=None, fit_pca=False, cmap='coolwarm', true_states=None, verbose=1):
     """
     Plot learned state representation using rewards for coloring
     :param states: (np.ndarray)
@@ -40,7 +40,8 @@ def plotRepresentation(states, rewards, name="Learned State Representation",
     if state_dim != 1 and (fit_pca or state_dim > 3):
         name += " (PCA)"
         n_components = min(state_dim, 3)
-        print("Fitting PCA with {} components".format(n_components))
+        if verbose:
+            print("Fitting PCA with {} components".format(n_components))
         states = PCA(n_components=n_components).fit_transform(states)
     if state_dim == 1:
         # Extend states as 2D:
@@ -52,12 +53,12 @@ def plotRepresentation(states, rewards, name="Learned State Representation",
     else:
         plot3dRepresentation(states, rewards, name, add_colorbar, path, cmap)
     plt.close('all')
-    print("Elapsed time : {:.2f}s".format(time()-st))
+    if verbose:
+        print("Elapsed time : {:.2f}s".format(time()-st))
 
 def plot2dRepresentation(states, rewards, name="Learned State Representation",
                          add_colorbar=True, path=None, cmap='coolwarm', true_states=None):
     fig = plt.figure(name)
-    # plt.clf()
     if true_states is not None:
         plt.scatter(true_states[:len(states), 0], true_states[:len(states), 1], s=7, c=states[:, 0], cmap=cmap,
                     linewidths=0.1)

@@ -86,7 +86,7 @@ if __name__ == '__main__':
     learner.VALIDATION_SIZE = args.val_size
     learner.BALANCED_SAMPLING = args.balanced_sampling
     learner.N_WORKERS = args.num_worker
-    th.backends.cudnn.benchmark = True
+    # th.backends.cudnn.benchmark = True
     # Dealing with losses to use
     has_loss_description = [isinstance(loss, tuple) for loss in args.losses]
     has_consistent_description, has_weight, has_splits = False, False, False
