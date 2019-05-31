@@ -19,8 +19,13 @@ def preprocessInput(x, mode="tf"):
     assert x.shape[-1] == 3, "Color channel must be at the end of the tensor {}".format(x.shape)
     x /= 255.
     if mode == "tf":
-        x -= 0.5
-        x *= 2.
+        x[..., 0] -= 0.5
+        x[..., 1] -= 0.5
+        x[..., 2] -= 0.5
+        # Scaling
+        x[..., 0] *= 2.
+        x[..., 1] *= 2.
+        x[..., 2] *= 2.
     elif mode == "image_net":
         # Zero-center by mean pixel
         x[..., 0] -= 0.485
@@ -45,7 +50,7 @@ def deNormalize(x, mode="image_net"):
     # Reorder channels when we have only one image
     if x.shape[0] == 3 and len(x.shape) == 3:
         # (n_channels, height, width) -> (height, width, n_channels)
-        x = np.transpose(x, (2, 0, 1))
+        x = np.transpose(x, (1, 2, 0))
     assert x.shape[-1] == 3, "Color channel must be at the end of the tensor {}".format(x.shape)
 
     if mode == "tf":

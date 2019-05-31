@@ -10,7 +10,7 @@ dev/
 .ropeproject/
 .pytest_cache/
 _build/
-
+figures/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
