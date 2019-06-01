@@ -37,7 +37,7 @@ N_WORKERS = 10
 # SAVE_PLOTS = True
 BATCH_SIZE = 256
 N_EPOCHS = 1
-VALIDATION_SIZE = 0.2  # 20% of training data for validation
+VALIDATION_SIZE = 0.05 # 0.2: 20% of training data for validation
 # Experimental: episode independent prior
 # Whether to do Uniform (default) or balanced sampling
 BALANCED_SAMPLING = False
@@ -152,12 +152,13 @@ class SRL4robotics(BaseLearner):
     :param path_to_dae: (str) path to pre-trained DAE when using perceptual loss
     :param state_dim_dae: (int)
     :param occlusion_percentage: (float) max percentage of occlusion when using DAE
+    :param pretrained_weights_path: SRL pretrained model weights path (default: None)
     """
 
     def __init__(self, state_dim, img_shape=None, model_type="resnet", inverse_model_type="linear", log_folder="logs/default",
                  seed=1, learning_rate=0.001, learning_rate_gan=(None, None), l1_reg=0.0, l2_reg=0.0, cuda=False,
                  multi_view=False, losses=None, losses_weights_dict=None, n_actions=6, beta=1,
-                 split_dimensions=-1, path_to_dae=None, state_dim_dae=200, occlusion_percentage=None):
+                 split_dimensions=-1, path_to_dae=None, state_dim_dae=200, occlusion_percentage=None, pretrained_weights_path=None):
 
         super(SRL4robotics, self).__init__(state_dim, BATCH_SIZE, seed, cuda)
 
@@ -168,6 +169,7 @@ class SRL4robotics(BaseLearner):
         self.denoiser = None
         self.img_shape = img_shape
         self.model_type = model_type
+        self.pretrained_weights_path = pretrained_weights_path
         if model_type in ["linear", "mlp", "resnet", "custom_cnn", 'gan'] \
                 or "autoencoder" in losses or "vae" in losses:
             self.use_forward_loss = "forward" in losses
@@ -282,7 +284,7 @@ class SRL4robotics(BaseLearner):
 
         return srl_model, exp_config
 
-    def learn(self, images_path, actions, rewards, episode_starts, figdir=None, monitor_mode='loss'):
+    def learn(self, images_path, actions, rewards, episode_starts, figdir=None, monitor_mode='loss', pretrained_weights_path=None):
         """
         Learn a state representation
         :param images_path: (numpy 1D array)
@@ -356,6 +358,12 @@ class SRL4robotics(BaseLearner):
         print("Train: {} minibatches, {} samples".format(len(dataloader_train), len(train_set)))
         print("Valid: {} minibatches, {} samples".format(len(dataloader_valid), len(valid_set)))
         # =======================================================================
+        # Load pretrained model weights
+        if self.pretrained_weights_path is not None:
+            assert os.path.exists(self.pretrained_weights_path), "Model weigths file: {} DOESN'T exist.".format(self.pretrained_weights_path)
+            print("Loading pretrained model weights from path: {}...".format(self.pretrained_weights_path))
+            self.module.load_state_dict(torch.load(self.pretrained_weights_path))
+
         # dissimilar_pairs, same_actions_pairs = None, None
         # if not self.no_priors:
         #     dissimilar_pairs, same_actions_pairs = findPriorsPairs(self.batch_size, minibatchlist, actions, rewards,
@@ -403,6 +411,7 @@ class SRL4robotics(BaseLearner):
                     # GAN's training requires multi-optimizers, thus multiple loss_manager/epoch_loss/val_loss, etc.
                     epoch_loss_D, epoch_batches_D = 0, 0
                     epoch_loss_G, epoch_batches_G = 0, 0
+                    d_acc, g_acc = 0, 0
                 epoch_loss, epoch_batches = 0, 0
                 n_batch_per_epoch = len(dataloader)
 
@@ -410,7 +419,7 @@ class SRL4robotics(BaseLearner):
                 if valid_mode:
                     self.module.eval()
                     # with torch.no_grad():
-                    self.prev_mode = torch.is_grad_enabled()
+                    self.prev_grad_mode = torch.is_grad_enabled()
                     torch.set_grad_enabled(False)
                     # torch._C.set_grad_enabled(False) ??
                 else:
@@ -508,26 +517,40 @@ class SRL4robotics(BaseLearner):
                         
                         # GAN's training requires multi-optimizers.
                         # === Train the Discriminator ===
-                        for _ in range(1):
+                        D_steps = 3 if (d_acc < 0.8) else 1
+                        G_steps = 3 if (g_acc < 0.2) else 1
+                        acc_cum = 0
+                        for _ in range(D_steps):
                             self.optimizer_D.zero_grad()
                             loss_manager_D.resetLosses()
                             (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
                             obs = obs.to(self.device)
+                            # re-define, because obs.size(0) changes... [TODO]
+                            # label_valid = label_valid[:obs.size(0)]
+                            # label_fake = label_fake[:obs.size(0)]
                             label_valid = torch.ones((obs.size(0), 1)).to(self.device)
                             label_fake = torch.zeros((obs.size(0), 1)).to(self.device)
-                            d_loss = self.module.model.train_on_batch_D(obs, label_valid, label_fake, self.optimizer_D, loss_manager_D, valid_mode=valid_mode, device=self.device)
+                            d_loss, d_acc = self.module.model.train_on_batch_D(obs, label_valid, label_fake, self.optimizer_D, loss_manager_D, valid_mode=valid_mode, device=self.device)
                             epoch_loss_D += d_loss
                             epoch_batches_D += 1
+                            acc_cum += d_acc
+                        d_acc = acc_cum / D_steps
+
                         # === Train the Generator ===
-                        for _ in range(1):
+                        acc_cum = 0
+                        for _ in range(G_steps):
                             self.optimizer_G.zero_grad()
                             loss_manager_G.resetLosses()
                             (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
                             obs = obs.to(self.device)
+                            # re-define, because obs.size(0) changes... [TODO]
+                            # label_valid = label_valid[:obs.size(0)]
                             label_valid = torch.ones((obs.size(0), 1)).to(self.device)
-                            g_loss = self.module.model.train_on_batch_G(obs, label_valid, self.optimizer_G, loss_manager_G, valid_mode=valid_mode, device=self.device)
+                            g_loss, g_acc = self.module.model.train_on_batch_G(obs, label_valid, self.optimizer_G, loss_manager_G, valid_mode=valid_mode, device=self.device)
                             epoch_loss_G += g_loss
                             epoch_batches_G += 1
+                            acc_cum += g_acc
+                        g_acc = acc_cum / G_steps
                         # === Train the Encoder and the other components (e.g. forward/inverse/reward model) ===
                         for _ in range(10):
                             self.optimizer.zero_grad()
@@ -556,11 +579,17 @@ class SRL4robotics(BaseLearner):
                                             name="Learned State Representation (Training Data)",
                                             path=os.path.join(figdir_repr, "Iter_{}.png".format(epoch*n_batch_per_epoch+iter_ind)),
                                             verbose=False)
+                        ##### Custom save losses
+                        if not valid_mode:
+                            with open(os.path.join(self.log_folder, "loss_history.csv"), "a") as file:
+                                np.savetxt(file, np.array([train_loss, train_loss_D, train_loss_G,
+                                                            d_acc, g_acc]).reshape(1, -1))
+
                         if monitor_mode == 'loss':
                             if iter_ind % ITER_FLAG == 0 or (iter_ind == n_batch_per_epoch-1):
                                 if not valid_mode:
-                                    print("\rEpoch {:3}/{}, {:.2%}, E_loss: {:.2f} D_loss: {:.4f} G_loss: {:.4f}| (elapsed time: {:.2f}s)".format(
-                                        epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, train_loss_D, train_loss_G, time.time() - start_time), end="")
+                                    print("\rEpoch {:3}/{}, {:.2%}, E_loss: {:.2f} D_loss: {:.4f} acc: {:.1%} G_loss: {:.4f} acc: {:.1%}| (elapsed time: {:.2f}s)".format(
+                                        epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, train_loss_D, d_acc, train_loss_G, g_acc, time.time() - start_time), end="")
                                 else:
                                     print("\r-------(valid): {:.2%}, E_loss: {:.2f} D_loss: {:.4f} G_loss: {:.4f} | (elapsed time: {:.2f}s)".format(
                                         (iter_ind+1)/n_batch_per_epoch, val_loss, val_loss_D, train_loss_G, time.time() - start_time), end="")
@@ -593,15 +622,12 @@ class SRL4robotics(BaseLearner):
                         elif monitor_mode == 'pbar':
                             pbar.update(1)
                 if valid_mode:
-                    torch.set_grad_enabled(self.prev_mode)
+                    torch.set_grad_enabled(self.prev_grad_mode)
                 if monitor_mode == 'loss':
                     print()
                 elif monitor_mode == 'pbar':
                     pbar.close()
-                    if valid_mode:
-                        current_loss = val_loss
-                    else:
-                        current_loss = train_loss
+                    current_loss = val_loss if valid_mode else train_loss
                     print("Epoch {:3}/{}, {:.2%}, loss: {:.4f}".format(epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, current_loss))
 
             
@@ -622,7 +648,6 @@ class SRL4robotics(BaseLearner):
             if self.model_type == 'gan':
                 loss_history_D = update_loss_history(loss_manager_D, train_loss_D, val_loss_D, epoch_batches_D, epoch)
                 loss_history_G = update_loss_history(loss_manager_G, train_loss_G, val_loss_G, epoch_batches_G, epoch)
-            
             # Save best model
             if val_loss < best_error: ## [TODO]
                 best_error = val_loss
@@ -631,7 +656,6 @@ class SRL4robotics(BaseLearner):
             if np.isnan(train_loss):
                 printRed("NaN Loss, consider increasing NOISE_STD in the gaussian noise layer")
                 sys.exit(NAN_ERROR)
-            # import ipdb; ipdb.set_trace()
             # Then we print the results for this epoch:
             if (epoch + 1) % EPOCH_FLAG == 0:
                 if figdir is not None:

@@ -1,10 +1,4 @@
-
-import os
-import glob
-import sys
 import numpy as np
-
-# Adapted from https://discuss.pytorch.org/t/unet-implementation/426
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -13,11 +7,11 @@ try:
     # relative import
     from .models import BaseModelSRL
     from .base_trainer import BaseTrainer
-    from ..losses.losses import ganNonSaturateLoss, autoEncoderLoss
+    from ..losses.losses import ganNonSaturateLoss, autoEncoderLoss, BCEaccuracy, ganBCEaccuracy
 except:
     from models.models import BaseModelSRL
     from models.base_trainer import BaseTrainer
-    from losses.losses import ganNonSaturateLoss, autoEncoderLoss
+    from losses.losses import ganNonSaturateLoss, autoEncoderLoss, BCEaccuracy, ganBCEaccuracy
     
 def ConvSN2d(in_channels, out_channels, kernel_size,
              stride=1,
@@ -470,18 +464,25 @@ class GANTrainer(BaseTrainer):
         sample_state = torch.randn((obs.size(0), self.state_dim), requires_grad=False).to(device)
         fake_img = self.generator(sample_state)
         # fake_loss 
-        ganNonSaturateLoss(self.discriminator(fake_img.detach()), label_fake, weight=1.0, loss_manager=loss_manager, name="ns_loss_D_fake")
+        fake_img_rating = self.discriminator(fake_img.detach())
+        ganNonSaturateLoss(fake_img_rating, label_fake, weight=1.0, loss_manager=loss_manager, name="ns_loss_D_fake")
         # real_loss
-        ganNonSaturateLoss(self.discriminator(obs), label_valid, weight=1.0, loss_manager=loss_manager, name="ns_loss_D_real")
+        real_img_rating = self.discriminator(obs)
+        ganNonSaturateLoss(real_img_rating, label_valid, weight=1.0, loss_manager=loss_manager, name="ns_loss_D_real")
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
-        return loss
+        acc_pos = ganBCEaccuracy(real_img_rating, label=1)
+        acc_neg = ganBCEaccuracy(fake_img_rating, label=0)
+        acc = (acc_pos + acc_neg) / 2.
+        return loss, acc.item()
+
     def train_on_batch_G(self, obs, label_valid, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
         sample_state = torch.randn((obs.size(0), self.state_dim), requires_grad=False).to(device)
         fake_img = self.generator(sample_state)
         fake_rating = self.discriminator(fake_img)
         ganNonSaturateLoss(fake_rating, label_valid, weight=1.0, loss_manager=loss_manager, name="ns_loss_G")
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
-        return loss
+        acc = ganBCEaccuracy(fake_rating, label=1)
+        return loss, acc.item()
     def reconstruct(self, x):
         return self.generator(self.encoder(x))
 

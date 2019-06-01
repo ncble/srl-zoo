@@ -34,8 +34,8 @@ if __name__ == '__main__':
     parser.add_argument('--training-set-size', type=int, default=-1,
                         help='Limit size (number of samples) of the training set (default: -1)')
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.005, help='learning rate (default: 0.005)')
-    parser.add_argument('-lr_G', '--learning-rate-G', type=float, default=1e-5, help='learning rate GAN: Generator (default: None)')
-    parser.add_argument('-lr_D', '--learning-rate-D', type=float, default=1e-5, help='learning rate GAN: Discriminator (default: None)')
+    parser.add_argument('-lr_G', '--learning-rate-G', type=float, default=7.0*1e-5, help='learning rate GAN: Generator (default: None)')
+    parser.add_argument('-lr_D', '--learning-rate-D', type=float, default=1.2*1e-5, help='learning rate GAN: Discriminator (default: None)')
     parser.add_argument('--l1-reg', type=float, default=0.0, help='L1 regularization coeff (default: 0.0)')
     parser.add_argument('--l2-reg', type=float, default=0.0, help='L2 regularization coeff (default: 0.0)')
     parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -76,7 +76,8 @@ if __name__ == '__main__':
                         help="Monitor mode: either print the losses ('loss') or show the progressbar ('pbar'). (default 'loss')")
     parser.add_argument('--num-worker', type=int, default=10,
                         help="Number of CPUs to use for dataloader.")
-
+    parser.add_argument('--srl-pre-weights', type=str, default=None,
+                        help="Load SRL pretrained weights.")
     args = parser.parse_args()
     args.cuda = not args.no_cuda and th.cuda.is_available()
     args.data_folder = parseDataFolder(args.data_folder)
@@ -86,7 +87,7 @@ if __name__ == '__main__':
     learner.VALIDATION_SIZE = args.val_size
     learner.BALANCED_SAMPLING = args.balanced_sampling
     learner.N_WORKERS = args.num_worker
-    # th.backends.cudnn.benchmark = True
+    th.backends.cudnn.benchmark = True
     # Dealing with losses to use
     has_loss_description = [isinstance(loss, tuple) for loss in args.losses]
     has_consistent_description, has_weight, has_splits = False, False, False
@@ -193,7 +194,7 @@ if __name__ == '__main__':
                        l1_reg=args.l1_reg, l2_reg=args.l2_reg, cuda=args.cuda, multi_view=args.multi_view,
                        losses=losses, losses_weights_dict=losses_weights_dict, n_actions=n_actions, beta=args.beta,
                        split_dimensions=split_dimensions, path_to_dae=args.path_to_dae,
-                       state_dim_dae=args.state_dim_dae, occlusion_percentage=args.occlusion_percentage)
+                       state_dim_dae=args.state_dim_dae, occlusion_percentage=args.occlusion_percentage, pretrained_weights_path=args.srl_pre_weights)
 
     if args.training_set_size > 0:
         limit = args.training_set_size

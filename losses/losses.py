@@ -41,7 +41,7 @@ class LossManager:
         """
         :param name: (str)
         :param weight: (float)
-        :param loss_value: (FloatTensor)
+        :param loss_value: (torch.FloatTensor)
         :return:
         """
         self.names.append(name)
@@ -385,3 +385,20 @@ def ganNonSaturateLoss(img_rating, label, weight, loss_manager, name="non_satura
     binary_crossentropy = th.nn.BCELoss()(img_rating, label)
     loss_manager.addToLosses(name, weight, binary_crossentropy)
     return weight * binary_crossentropy
+
+def BCEaccuracy(output, target):
+    pred = output > 0.5
+    truth = target > 0.5
+    acc = pred.eq(truth).sum() / target.numel()
+    return acc
+def ganBCEaccuracy(output, label=1):
+    """
+    label (int): 0 or 1
+    """
+    pred = output > 0.5
+    pred = pred.type(th.float)
+    if label:
+        acc = pred.sum() / pred.numel()
+    else:
+        acc = 1. - pred.sum() / pred.numel()
+    return acc
