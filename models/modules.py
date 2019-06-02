@@ -65,7 +65,9 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         if model_type == 'gan':
             self.model = GANTrainer(img_shape=self.img_shape, state_dim=state_dim)
             self.model.build_model()
-            
+        elif model_type == 'unet': ## HACK [TODO: only for DEBUG]
+            self.model = AutoEncoderTrainer(state_dim=state_dim, img_shape=self.img_shape)
+            self.model.build_model(model_type='unet')
         # if model_type == "custom_cnn":
         #     if "autoencoder" in losses or "dae" in losses:
         #         self.model = CNNAutoEncoder(state_dim, img_shape=self.img_shape)

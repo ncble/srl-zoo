@@ -37,7 +37,7 @@ N_WORKERS = 10
 # SAVE_PLOTS = True
 BATCH_SIZE = 256
 N_EPOCHS = 1
-VALIDATION_SIZE = 0.05 # 0.2: 20% of training data for validation
+VALIDATION_SIZE = 0.2 # 20% of training data for validation
 # Experimental: episode independent prior
 # Whether to do Uniform (default) or balanced sampling
 BALANCED_SAMPLING = False
@@ -170,7 +170,7 @@ class SRL4robotics(BaseLearner):
         self.img_shape = img_shape
         self.model_type = model_type
         self.pretrained_weights_path = pretrained_weights_path
-        if model_type in ["linear", "mlp", "resnet", "custom_cnn", 'gan'] \
+        if model_type in ["linear", "mlp", "resnet", "custom_cnn", 'gan', 'unet'] \
                 or "autoencoder" in losses or "vae" in losses:
             self.use_forward_loss = "forward" in losses
             self.use_inverse_loss = "inverse" in losses
@@ -516,43 +516,45 @@ class SRL4robotics(BaseLearner):
                     if self.model_type == 'gan':
                         
                         # GAN's training requires multi-optimizers.
-                        # === Train the Discriminator ===
-                        D_steps = 3 if (d_acc < 0.8) else 1
-                        G_steps = 3 if (g_acc < 0.2) else 1
-                        acc_cum = 0
-                        for _ in range(D_steps):
-                            self.optimizer_D.zero_grad()
-                            loss_manager_D.resetLosses()
-                            (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
-                            obs = obs.to(self.device)
-                            # re-define, because obs.size(0) changes... [TODO]
-                            # label_valid = label_valid[:obs.size(0)]
-                            # label_fake = label_fake[:obs.size(0)]
-                            label_valid = torch.ones((obs.size(0), 1)).to(self.device)
-                            label_fake = torch.zeros((obs.size(0), 1)).to(self.device)
-                            d_loss, d_acc = self.module.model.train_on_batch_D(obs, label_valid, label_fake, self.optimizer_D, loss_manager_D, valid_mode=valid_mode, device=self.device)
-                            epoch_loss_D += d_loss
-                            epoch_batches_D += 1
-                            acc_cum += d_acc
-                        d_acc = acc_cum / D_steps
+                        if not valid_mode:
+                            # === Train the Discriminator ===
+                            D_steps = 3 if (d_acc < 0.8) else 1
+                            G_steps = 3 if (g_acc < 0.2) else 1
+                            acc_cum = 0
+                            for _ in range(D_steps):
+                                self.optimizer_D.zero_grad()
+                                loss_manager_D.resetLosses()
+                                (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
+                                obs = obs.to(self.device)
+                                # re-define, because obs.size(0) changes... [TODO]
+                                # label_valid = label_valid[:obs.size(0)]
+                                # label_fake = label_fake[:obs.size(0)]
+                                label_valid = torch.ones((obs.size(0), 1)).to(self.device)
+                                label_fake = torch.zeros((obs.size(0), 1)).to(self.device)
+                                d_loss, d_acc = self.module.model.train_on_batch_D(obs, label_valid, label_fake, self.optimizer_D, loss_manager_D, valid_mode=valid_mode, device=self.device)
+                                epoch_loss_D += d_loss
+                                epoch_batches_D += 1
+                                acc_cum += d_acc
+                            d_acc = acc_cum / D_steps
 
-                        # === Train the Generator ===
-                        acc_cum = 0
-                        for _ in range(G_steps):
-                            self.optimizer_G.zero_grad()
-                            loss_manager_G.resetLosses()
-                            (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
-                            obs = obs.to(self.device)
-                            # re-define, because obs.size(0) changes... [TODO]
-                            # label_valid = label_valid[:obs.size(0)]
-                            label_valid = torch.ones((obs.size(0), 1)).to(self.device)
-                            g_loss, g_acc = self.module.model.train_on_batch_G(obs, label_valid, self.optimizer_G, loss_manager_G, valid_mode=valid_mode, device=self.device)
-                            epoch_loss_G += g_loss
-                            epoch_batches_G += 1
-                            acc_cum += g_acc
-                        g_acc = acc_cum / G_steps
+                            # === Train the Generator ===
+                            acc_cum = 0
+                            for _ in range(G_steps):
+                                self.optimizer_G.zero_grad()
+                                loss_manager_G.resetLosses()
+                                (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
+                                obs = obs.to(self.device)
+                                # re-define, because obs.size(0) changes... [TODO]
+                                # label_valid = label_valid[:obs.size(0)]
+                                label_valid = torch.ones((obs.size(0), 1)).to(self.device)
+                                g_loss, g_acc = self.module.model.train_on_batch_G(obs, label_valid, self.optimizer_G, loss_manager_G, valid_mode=valid_mode, device=self.device)
+                                epoch_loss_G += g_loss
+                                epoch_batches_G += 1
+                                acc_cum += g_acc
+                            g_acc = acc_cum / G_steps
                         # === Train the Encoder and the other components (e.g. forward/inverse/reward model) ===
-                        for _ in range(10):
+                        E_steps = 10 if not valid_mode else 1
+                        for _ in range(E_steps):
                             self.optimizer.zero_grad()
                             loss_manager.resetLosses()
                             (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
@@ -565,15 +567,13 @@ class SRL4robotics(BaseLearner):
                             train_loss_G = epoch_loss_G / float(epoch_batches_G)
                             train_loss   = epoch_loss   / float(epoch_batches)
                         else:
-                            val_loss_D = epoch_loss_D / float(epoch_batches_D)
-                            val_loss_G = epoch_loss_G / float(epoch_batches_G)
                             val_loss   = epoch_loss   / float(epoch_batches)
                         ##### Custom/Optional plots
-                        if iter_ind%20 == 0:
+                        if iter_ind % 20 == 0 and not valid_mode:
                             reconstruct_obs = self.module.model.reconstruct(obs)
                             images = make_grid([obs[0], reconstruct_obs[0], obs[1], reconstruct_obs[1]], nrow=2) # , normalize=True, range=(0,1)
                             plotImage(deNormalize(detachToNumpy(images)), mode='cv2', save2dir=figdir_recon, index=(epoch*n_batch_per_epoch+iter_ind))
-                        if iter_ind%300 == 0 and iter_ind>0:
+                        if iter_ind%300 == 0 and iter_ind>0 and not valid_mode:
                             # print("Predicting states for all the observations...")
                             plotRepresentation(self.predStatesWithDataLoader(dataloader_test), rewards,
                                             name="Learned State Representation (Training Data)",
@@ -586,13 +586,15 @@ class SRL4robotics(BaseLearner):
                                                             d_acc, g_acc]).reshape(1, -1))
 
                         if monitor_mode == 'loss':
+                            
                             if iter_ind % ITER_FLAG == 0 or (iter_ind == n_batch_per_epoch-1):
                                 if not valid_mode:
                                     print("\rEpoch {:3}/{}, {:.2%}, E_loss: {:.2f} D_loss: {:.4f} acc: {:.1%} G_loss: {:.4f} acc: {:.1%}| (elapsed time: {:.2f}s)".format(
                                         epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, train_loss_D, d_acc, train_loss_G, g_acc, time.time() - start_time), end="")
                                 else:
-                                    print("\r-------(valid): {:.2%}, E_loss: {:.2f} D_loss: {:.4f} G_loss: {:.4f} | (elapsed time: {:.2f}s)".format(
-                                        (iter_ind+1)/n_batch_per_epoch, val_loss, val_loss_D, train_loss_G, time.time() - start_time), end="")
+                                    val_loss_str = "{:.2f}*".format(val_loss) if val_loss < best_error else "{:.2f}".format(val_loss)
+                                    print("\r-------(valid): {:.2%}, E_loss: {} | (elapsed time: {:.2f}s)".format(
+                                        (iter_ind+1)/n_batch_per_epoch, val_loss_str, time.time() - start_time), end="")
                         elif monitor_mode == 'pbar':
                             pbar.update(1)
 
@@ -611,14 +613,15 @@ class SRL4robotics(BaseLearner):
                         else:
                             # mean validation loss so far
                             val_loss = epoch_loss / float(epoch_batches)
+                            val_loss_str = "{:.4f}*".format(val_loss) if val_loss < best_error else "{:.4f}".format(val_loss)
                         if monitor_mode == 'loss':
                             if iter_ind % ITER_FLAG == 0 or (iter_ind == n_batch_per_epoch-1):
                                 if not valid_mode:
                                     print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} | (elapsed time: {:.2f}s)".format(
                                         epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, time.time() - start_time), end="")
                                 else:
-                                    print("\r-------(valid): {:.2%}, val_loss: {:.4f} | (elapsed time: {:.2f}s)".format(
-                                        (iter_ind+1)/n_batch_per_epoch, val_loss, time.time() - start_time), end="")
+                                    print("\r-------(valid): {:.2%}, val_loss: {} | (elapsed time: {:.2f}s)".format(
+                                        (iter_ind+1)/n_batch_per_epoch, val_loss_str, time.time() - start_time), end="")
                         elif monitor_mode == 'pbar':
                             pbar.update(1)
                 if valid_mode:
@@ -645,9 +648,9 @@ class SRL4robotics(BaseLearner):
                         loss_history[key].append(0)
                 return loss_history
             loss_history = update_loss_history(loss_manager, train_loss, val_loss, epoch_batches, epoch)
-            if self.model_type == 'gan':
-                loss_history_D = update_loss_history(loss_manager_D, train_loss_D, val_loss_D, epoch_batches_D, epoch)
-                loss_history_G = update_loss_history(loss_manager_G, train_loss_G, val_loss_G, epoch_batches_G, epoch)
+            if self.model_type == 'gan' and not valid_mode:
+                loss_history_D = update_loss_history(loss_manager_D, train_loss_D, 0, epoch_batches_D, epoch)
+                loss_history_G = update_loss_history(loss_manager_G, train_loss_G, 0, epoch_batches_G, epoch)
             # Save best model
             if val_loss < best_error: ## [TODO]
                 best_error = val_loss
@@ -667,7 +670,7 @@ class SRL4robotics(BaseLearner):
                                         #    add_colorbar=epoch == 0,
                                            name="Learned State Representation (Training Data)",
                                            path=os.path.join(figdir_repr, "Epoch_{}.png".format(epoch+1)))
-                        if self.use_autoencoder or self.use_vae or self.use_dae: #  or self.model_type == 'gan'
+                        if self.use_autoencoder or self.use_vae or self.use_dae or self.model_type=="unet": #  or self.model_type == 'gan'
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB
                                 reconstruct_obs = self.module.model.reconstruct(obs)

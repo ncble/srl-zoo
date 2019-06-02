@@ -386,11 +386,6 @@ def ganNonSaturateLoss(img_rating, label, weight, loss_manager, name="non_satura
     loss_manager.addToLosses(name, weight, binary_crossentropy)
     return weight * binary_crossentropy
 
-def BCEaccuracy(output, target):
-    pred = output > 0.5
-    truth = target > 0.5
-    acc = pred.eq(truth).sum() / target.numel()
-    return acc
 def ganBCEaccuracy(output, label=1):
     """
     label (int): 0 or 1
@@ -402,3 +397,12 @@ def ganBCEaccuracy(output, label=1):
     else:
         acc = 1. - pred.sum() / pred.numel()
     return acc
+
+
+def AEboundLoss(state_pred, weight, loss_manager, name='bonud_state_loss', max_val=50):
+    ## state_pred of shape (batch_size, state_dim)
+    A = state_pred ** 2 
+    norm_inf, _ = th.max(A, 1)
+    bound_loss = th.mean(th.relu(norm_inf-max_val))
+    loss_manager.addToLosses(name, weight, bound_loss)
+    return weight * bound_loss

@@ -7,11 +7,11 @@ try:
     # relative import
     from .models import BaseModelSRL
     from .base_trainer import BaseTrainer
-    from ..losses.losses import ganNonSaturateLoss, autoEncoderLoss, BCEaccuracy, ganBCEaccuracy
+    from ..losses.losses import ganNonSaturateLoss, autoEncoderLoss, ganBCEaccuracy, AEboundLoss
 except:
     from models.models import BaseModelSRL
     from models.base_trainer import BaseTrainer
-    from losses.losses import ganNonSaturateLoss, autoEncoderLoss, BCEaccuracy, ganBCEaccuracy
+    from losses.losses import ganNonSaturateLoss, autoEncoderLoss, ganBCEaccuracy, AEboundLoss
     
 def ConvSN2d(in_channels, out_channels, kernel_size,
              stride=1,
@@ -232,8 +232,8 @@ class UNetUpBlock(nn.Module):
 
 class Generator(nn.Module):
     def __init__(self, img_shape, state_dim,
-                 unet_depth=3,
-                 unet_ch=32,
+                 unet_depth=2, # 3
+                 unet_ch=16, # 32
                  spectral_norm=False,
                  unet_bn=False,
                  unet_drop=0.0):
@@ -288,7 +288,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, img_shape, state_dim,
                  spectral_norm=False,
-                 d_chs=32):
+                 d_chs=16): # 32
         super().__init__()
         self.img_shape = img_shape
         self.state_dim = state_dim
@@ -370,7 +370,7 @@ class Encoder(BaseModelSRL):
     Note: Only Encoder has getStates method.
     """
     def __init__(self, img_shape, state_dim,
-                 unet_depth=3,
+                 unet_depth=2, # 3 
                  unet_ch=16,
                  unet_bn=False,
                  unet_drop=0.0,
@@ -456,8 +456,14 @@ class GANTrainer(BaseTrainer):
         ## Compute loss tensor (add to the previous losses cumulated in loss_manager)
         # state_pred, state_pred_next = self.encoder(obs), self.encoder(next_obs)
         # reconstruct_obs, reconstruct_obs_next = self.generator(state_pred), self.generator(state_pred_next)
-        reconstruct_obs, reconstruct_obs_next = self.reconstruct(obs), self.reconstruct(next_obs)
+        
+        # reconstruct_obs, reconstruct_obs_next = self.reconstruct(obs), self.reconstruct(next_obs)
+
+        state_pred = self.encoder(obs)
+        reconstruct_obs = self.generator(state_pred)
+        reconstruct_obs_next = self.reconstruct(next_obs)
         autoEncoderLoss(obs, reconstruct_obs, next_obs, reconstruct_obs_next, 10000.0, loss_manager)
+        AEboundLoss(state_pred, 1.0, loss_manager) ## NEW [TODO]
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
     def train_on_batch_D(self, obs, label_valid, label_fake, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):

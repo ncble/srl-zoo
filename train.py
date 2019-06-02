@@ -42,7 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-display-plots', action='store_true', default=False,
                         help='disables live plots of the representation learned')
     parser.add_argument('--model-type', type=str, default="custom_cnn",
-                        choices=['custom_cnn', 'resnet', 'mlp', 'linear', 'gan'],
+                        choices=['custom_cnn', 'resnet', 'mlp', 'linear', 'gan', 'unet'],
                         help='Model architecture (default: "custom_cnn")')
     parser.add_argument('--inverse-model-type', type=str, default="linear",
                         choices=['mlp', 'linear'],
