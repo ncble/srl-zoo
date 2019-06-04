@@ -131,7 +131,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
 
     def add_inverse_loss(self, states, actions_st, next_states, loss_manager):
         actions_pred = self.inverseModel(states, next_states)
-        inverseModelLoss(actions_pred, actions_st, weight=1.0, loss_manager=loss_manager)
+        inverseModelLoss(actions_pred, actions_st, weight=2.0, loss_manager=loss_manager)
 
     def add_reward_loss(self, states, rewards_st, next_states, loss_manager):
         rewards_pred = self.rewardModel(states, next_states)

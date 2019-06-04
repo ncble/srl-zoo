@@ -459,7 +459,7 @@ class RobotEnvDataset(torch.utils.data.Dataset):
                 return index, img.astype(self.dtype), img_next.astype(self.dtype), action, reward, 1, 1
             else:
                 img = self._get_one_img(image_path)
-                return img
+                return img.astype(self.dtype)
         
         else: ## [TODO: not tested yet]
             raise NotImplementedError

@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--l1-reg', type=float, default=0.0, help='L1 regularization coeff (default: 0.0)')
     parser.add_argument('--l2-reg', type=float, default=0.0, help='L2 regularization coeff (default: 0.0)')
     # parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
-    parser.add_argument('--gpu_num', type=int, default=None, help='CUDA visible device (default None, i.e. CPU)')
+    parser.add_argument('--gpu_num', type=int, default=-1, help='CUDA visible device (default -1, i.e. CPU)')
     parser.add_argument('--no-display-plots', action='store_true', default=False,
                         help='disables live plots of the representation learned')
     parser.add_argument('--model-type', type=str, default="custom_cnn",
@@ -229,5 +229,5 @@ if __name__ == '__main__':
     correlationCall(exp_config, plot=not args.no_display_plots)
 
     # Do not close plot at the end of training
-    if learner.SAVE_PLOTS:
-        getInputBuiltin()('\nPress any key to exit.')
+    # if learner.SAVE_PLOTS:
+    #     getInputBuiltin()('\nPress any key to exit.')

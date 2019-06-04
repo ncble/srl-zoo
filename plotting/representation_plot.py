@@ -257,57 +257,88 @@ def plotAgainst(states, rewards, title="Representation", fit_pca=False, cmap='co
     plt.show()
 
 
-def plotCorrelation(states_rewards, ground_truth, target_positions, only_print=False):
+# def plotCorrelation(states_rewards, ground_truth, target_positions, only_print=False):
+#     """
+#     Correlation matrix: Target pos/ground truth states vs. States predicted
+
+#     :param states_rewards: (numpy dict)
+#     :param ground_truth: (numpy dict)
+#     :param target_positions: (np.ndarray)
+#     :param only_print: (bool) only print the correlation mesurements (max of correlation for each of
+#         Ground Truth's dimension)
+#     :return: returns the max correlation for each of Ground Truth's dimension with the predicted states
+#             as well as its mean
+#     """
+#     np.set_printoptions(precision=2)
+#     correlation_max_vector = np.array([])
+
+#     for index, ground_truth_name in enumerate([" Agent's position ", "Target Position"]):
+#         if ground_truth_name == " Agent's position ":
+#             key = 'ground_truth_states' if 'ground_truth_states' in ground_truth.keys() else 'arm_states'
+#             x = ground_truth[key][:len(rewards)]
+#         else:
+#             x = target_positions[:len(rewards)]
+#         # adding epsilon in case of little variance in samples of X & Ys
+#         eps = 1e-12
+#         corr = np.corrcoef(x=x + eps, y=states_rewards['states'] + eps, rowvar=0)
+#         fig = plt.figure(figsize=(8, 6))
+#         ax = fig.add_subplot(111)
+#         labels = [r'$\tilde{s}_' + str(i_) + '$' for i_ in range(x.shape[1])]
+#         labels += [r'$s_' + str(i_) + '$' for i_ in range(states_rewards['states'].shape[1])]
+#         cax = ax.matshow(corr, cmap=cmap, vmin=-1, vmax=1)
+#         ax.set_xticklabels([''] + labels)
+#         ax.set_yticklabels([''] + labels)
+#         ax.grid(False)
+#         plt.title(r'Correlation Matrix: S = Predicted states | $\tilde{S}$ = ' + ground_truth_name)
+#         fig.colorbar(cax, label='correlation coefficient')
+#         # Building the vector of max correlation ( a scalar for each of the Ground Truth's dimension)
+#         ground_truth_dim = x.shape[1]
+#         corr_copy = corr
+#         for idx in range(ground_truth_dim):
+#             corr_copy[idx, idx] = 0.0
+#             correlation_max_vector = np.append(correlation_max_vector, max(abs(corr_copy[idx])))
+#     # Printing the max correlation for each of Ground Truth's dimension with the predicted states
+#     # as well as the mean
+#     correlation_scalar = sum(correlation_max_vector)
+#     print("\nCorrelation value of the model's prediction with the Ground Truth:\n Max correlation vector (GTC): {}"
+#           "\n Mean : {:.2f}".format(correlation_max_vector, correlation_scalar / len(correlation_max_vector)))
+#     if not only_print:
+#         plt.show()
+#     return correlation_max_vector, correlation_scalar / len(correlation_max_vector)
+
+def compute_GTC(state_pred, ground_truth, epsilon=1e-8):
     """
-    Correlation matrix: Target pos/ground truth states vs. States predicted
-
-    :param states_rewards: (numpy dict)
-    :param ground_truth: (numpy dict)
-    :param target_positions: (np.ndarray)
-    :param only_print: (bool) only print the correlation mesurements (max of correlation for each of
-        Ground Truth's dimension)
-    :return: returns the max correlation for each of Ground Truth's dimension with the predicted states
-            as well as its mean
+    :param state_pred (np.array) shape (N, state_dim)
+    :param ground_truth (np.array) shape (N, dim), usually dim = 2
+    return GTC (np.array): max of correlation coefficients, shape (dim, )
     """
-    np.set_printoptions(precision=2)
-    correlation_max_vector = np.array([])
+    assert len(state_pred.shape) == len(ground_truth.shape) == 2, "Input should be 2D array"
+    std_sp = np.std(state_pred, axis=0) # shape (state_dim, )
+    std_gt = np.std(ground_truth, axis=0) # shape (dim, )
+    mean_sp = np.mean(state_pred, axis=0)
+    mean_gt = np.mean(ground_truth, axis=0)
+    
+    # scalar product
+    A = (state_pred-mean_sp)[..., None] * (ground_truth-mean_gt)[:, None, :] 
+    corr = np.mean(A, axis=0) # shape (state_dim, dim)
+    std = std_sp[:, None] * std_gt[None, :]
+    corr = corr / (std+epsilon)
+    gtc = np.max(corr, axis=0)
+    for ind, std in enumerate(std_gt):
+        if std < epsilon:
+            gtc[ind] = 0
+    return gtc
+def plotCorrelation(states_rewards, ground_truth, target_positions, only_print=True):
+    states_pred = states_rewards['states']
+    gt_pos = ground_truth['ground_truth_states'] # 'arm_states'
+    gtc = []
+    for gt_states in [gt_pos, target_positions]: ## 
+        gtc.append(compute_GTC(states_pred, gt_states))
+    gtc = np.hstack(gtc)
+    print(gtc)
+    
+    return gtc, np.mean(gtc)
 
-    for index, ground_truth_name in enumerate([" Agent's position ", "Target Position"]):
-        if ground_truth_name == " Agent's position ":
-            key = 'ground_truth_states' if 'ground_truth_states' in ground_truth.keys() else 'arm_states'
-            x = ground_truth[key][:len(rewards)]
-        else:
-            x = target_positions[:len(rewards)]
-
-        # adding epsilon in case of little variance in samples of X & Ys
-        eps = 1e-12
-        corr = np.corrcoef(x=x + eps, y=states_rewards['states'] + eps, rowvar=0)
-        fig = plt.figure(figsize=(8, 6))
-        ax = fig.add_subplot(111)
-        labels = [r'$\tilde{s}_' + str(i_) + '$' for i_ in range(x.shape[1])]
-        labels += [r'$s_' + str(i_) + '$' for i_ in range(states_rewards['states'].shape[1])]
-        cax = ax.matshow(corr, cmap=cmap, vmin=-1, vmax=1)
-        ax.set_xticklabels([''] + labels)
-        ax.set_yticklabels([''] + labels)
-        ax.grid(False)
-        plt.title(r'Correlation Matrix: S = Predicted states | $\tilde{S}$ = ' + ground_truth_name)
-        fig.colorbar(cax, label='correlation coefficient')
-
-        # Building the vector of max correlation ( a scalar for each of the Ground Truth's dimension)
-        ground_truth_dim = x.shape[1]
-        corr_copy = corr
-        for idx in range(ground_truth_dim):
-            corr_copy[idx, idx] = 0.0
-            correlation_max_vector = np.append(correlation_max_vector, max(abs(corr_copy[idx])))
-
-    # Printing the max correlation for each of Ground Truth's dimension with the predicted states
-    # as well as the mean
-    correlation_scalar = sum(correlation_max_vector)
-    print("\nCorrelation value of the model's prediction with the Ground Truth:\n Max correlation vector (GTC): {}"
-          "\n Mean : {:.2f}".format(correlation_max_vector, correlation_scalar / len(correlation_max_vector)))
-    if not only_print:
-        plt.show()
-    return correlation_max_vector, correlation_scalar / len(correlation_max_vector)
 
 
 if __name__ == '__main__':

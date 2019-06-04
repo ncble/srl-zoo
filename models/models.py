@@ -79,6 +79,14 @@ class BaseModelAutoEncoder(BaseModelSRL):
 
             nn.ConvTranspose2d(64, getNChannels(), kernel_size=4, stride=2),  # 224x224xN_CHANNELS
         )
+
+    def getStates(self, observations):
+        """
+        :param observations: (th.Tensor)
+        :return: (th.Tensor)
+        """
+        return self.encode(observations)
+
     def encode(self, x):
         """
         :param x: (th.Tensor)
@@ -227,14 +235,6 @@ def encodeOneHot(tensor, n_dim):
     """
     encoded_tensor = th.Tensor(tensor.shape[0], n_dim).zero_().to(tensor.device)
     return encoded_tensor.scatter_(1, tensor.data, 1.)
-if __name__ == "__main__":
-    print("Start")
-
-    img_shape = (3,128,128)
-    model = CustomCNN(state_dim=2, img_shape=img_shape)
-    A = summary(model, img_shape)
-    
-
 class GaussianNoise(nn.Module):
     """
     Gaussian Noise layer
@@ -280,3 +280,12 @@ class GaussianNoiseVariant(nn.Module):
             noise.data.normal_(self.mean, std=self.std)
             return x + noise
         return x
+if __name__ == "__main__":
+    print("Start")
+
+    img_shape = (3,128,128)
+    model = CustomCNN(state_dim=2, img_shape=img_shape)
+    A = summary(model, img_shape)
+    
+
+
