@@ -62,7 +62,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
             self.model.build_model(model_type=model_type)
         else:
             pass
-        if model_type == 'gan':
+        if model_type == 'gan': ## [TODO: gan should be a loss type (not model_type) in the future]
             self.model = GANTrainer(img_shape=self.img_shape, state_dim=state_dim)
             self.model.build_model()
         elif model_type == 'unet': ## HACK [TODO: only for DEBUG]

@@ -1,14 +1,16 @@
 from __future__ import print_function, division, absolute_import
 
-from .models import BaseModelVAE
+
 import torch
 import torch.nn as nn
 from torchsummary import summary
 try:
     ## relative import: when executing as a package: python -m ...
+    from .base_models import BaseModelVAE
     from ..losses.losses import kullbackLeiblerLoss, generationLoss
 except:
     ## absolute import: when executing directly: python train.py ...
+    from models.base_models import BaseModelVAE
     from losses.losses import kullbackLeiblerLoss, generationLoss
 class DenseVAE(BaseModelVAE):
     """

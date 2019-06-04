@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--l1-reg', type=float, default=0.0, help='L1 regularization coeff (default: 0.0)')
     parser.add_argument('--l2-reg', type=float, default=0.0, help='L2 regularization coeff (default: 0.0)')
     # parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
-    parser.add_argument('--gpu_num', type=int, default=-1, help='CUDA visible device (default -1, i.e. CPU)')
+    parser.add_argument('--gpu_num', type=int, default=0, help='CUDA visible device (use CPU if -1, default: 0)')
     parser.add_argument('--no-display-plots', action='store_true', default=False,
                         help='disables live plots of the representation learned')
     parser.add_argument('--model-type', type=str, default="custom_cnn",
