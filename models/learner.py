@@ -50,10 +50,10 @@ class BaseLearner(object):
     :param state_dim: (int)
     :param batch_size: (int)
     :param seed: (int)
-    :param cuda: (bool)
+    :param cuda: (int) (default None) equi to CUDA_VISIBLE_DEVICES
     """
 
-    def __init__(self, state_dim, batch_size, seed=1, cuda=False):
+    def __init__(self, state_dim, batch_size, seed=1, cuda=None):
         super(BaseLearner, self).__init__()
         self.state_dim = state_dim
         self.batch_size = batch_size
@@ -64,13 +64,13 @@ class BaseLearner(object):
         # Seed the random generator
         np.random.seed(seed)
         torch.manual_seed(seed)
-        if cuda: # This will increase the training by 5-10%.
+        if cuda is not None:  # This will increase the training by 5-10%.
             # Make CuDNN Determinist
             torch.backends.cudnn.deterministic = True
             torch.cuda.manual_seed(seed)
 
         self.device = torch.device(
-            "cuda:0" if torch.cuda.is_available() and cuda else "cpu")
+            "cuda:{}".format(cuda) if torch.cuda.is_available() and (cuda is not None) else "cpu")
 
     def _predFn(self, observations):
         """
@@ -142,7 +142,7 @@ class SRL4robotics(BaseLearner):
     :param learning_rate_gan: tuple of float (lr_D, lr_G)
     :param l1_reg: (float) weight for l1 regularization
     :param l2_reg: (float) weight for l2 regularization
-    :param cuda: (bool)
+    :param cuda: (int) (default None) equi to CUDA_VISIBLE_DEVICES
     :param multi_view: (bool)
     :param losses: ([str])
     :param losses_weights_dict: (OrderedDict)
@@ -156,7 +156,7 @@ class SRL4robotics(BaseLearner):
     """
 
     def __init__(self, state_dim, img_shape=None, model_type="resnet", inverse_model_type="linear", log_folder="logs/default",
-                 seed=1, learning_rate=0.001, learning_rate_gan=(None, None), l1_reg=0.0, l2_reg=0.0, cuda=False,
+                 seed=1, learning_rate=0.001, learning_rate_gan=(None, None), l1_reg=0.0, l2_reg=0.0, cuda=None,
                  multi_view=False, losses=None, losses_weights_dict=None, n_actions=6, beta=1,
                  split_dimensions=-1, path_to_dae=None, state_dim_dae=200, occlusion_percentage=None, pretrained_weights_path=None):
 
@@ -199,7 +199,7 @@ class SRL4robotics(BaseLearner):
         print("Using {} model".format(model_type))
 
         self.cuda = cuda
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() and cuda else "cpu")
+        self.device = torch.device("cuda:{}".format(cuda) if torch.cuda.is_available() and (cuda is not None) else "cpu")
 
         if self.episode_prior:
             self.prior_discriminator = PriorDiscriminator(2 * self.state_dim).to(self.device)

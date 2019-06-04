@@ -38,7 +38,8 @@ if __name__ == '__main__':
     parser.add_argument('-lr_D', '--learning-rate-D', type=float, default=1.2*1e-5, help='learning rate GAN: Discriminator (default: None)')
     parser.add_argument('--l1-reg', type=float, default=0.0, help='L1 regularization coeff (default: 0.0)')
     parser.add_argument('--l2-reg', type=float, default=0.0, help='L2 regularization coeff (default: 0.0)')
-    parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
+    # parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
+    parser.add_argument('--gpu_num', type=int, default=None, help='CUDA visible device (default None, i.e. CPU)')
     parser.add_argument('--no-display-plots', action='store_true', default=False,
                         help='disables live plots of the representation learned')
     parser.add_argument('--model-type', type=str, default="custom_cnn",
@@ -79,7 +80,7 @@ if __name__ == '__main__':
     parser.add_argument('--srl-pre-weights', type=str, default=None,
                         help="Load SRL pretrained weights.")
     args = parser.parse_args()
-    args.cuda = not args.no_cuda and th.cuda.is_available()
+    # args.cuda = not args.no_cuda and th.cuda.is_available()
     args.data_folder = parseDataFolder(args.data_folder)
     learner.SAVE_PLOTS = not args.no_display_plots
     learner.N_EPOCHS = args.epochs
@@ -191,7 +192,7 @@ if __name__ == '__main__':
     srl = SRL4robotics(args.state_dim, img_shape=img_shape, model_type=args.model_type, inverse_model_type=args.inverse_model_type,
                        seed=args.seed,
                        log_folder=args.log_folder, learning_rate=args.learning_rate, learning_rate_gan=(args.learning_rate_D, args.learning_rate_G),
-                       l1_reg=args.l1_reg, l2_reg=args.l2_reg, cuda=args.cuda, multi_view=args.multi_view,
+                       l1_reg=args.l1_reg, l2_reg=args.l2_reg, cuda=args.gpu_num, multi_view=args.multi_view,
                        losses=losses, losses_weights_dict=losses_weights_dict, n_actions=n_actions, beta=args.beta,
                        split_dimensions=split_dimensions, path_to_dae=args.path_to_dae,
                        state_dim_dae=args.state_dim_dae, occlusion_percentage=args.occlusion_percentage, pretrained_weights_path=args.srl_pre_weights)
