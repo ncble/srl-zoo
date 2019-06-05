@@ -21,9 +21,9 @@ class BaseForwardModel(BaseModelSRL):
     def forwardModel(self, state, action):
         """
         Predict next state given current state and action
-        :param state: (th.Tensor)
-        :param action: (th Tensor)
-        :return: (th.Tensor)
+        :param state: (torch.Tensor)
+        :param action: (torch.Tensor)
+        :return: (torch.Tensor)
         """
         # Predict the delta between the next state and current state
         # by taking as input concatenation of state & action over the 2nd dimension
@@ -38,11 +38,11 @@ class BaseInverseModel(BaseModelSRL):
 
     def initInverseNet(self, state_dim, action_dim, n_hidden=128, model_type="linear"):
         """
-        :param state_dim: (th.Tensor)
+        :param state_dim: (torch.Tensor)
         :param action_dim: (int)
         :param n_hidden: (int)
         :param model_type: (str)
-        :return: (th.Tensor)
+        :return: (torch.Tensor)
         """
         if model_type == "linear":
             self.inverse_net = nn.Linear(state_dim * 2, action_dim)
@@ -62,12 +62,12 @@ class BaseInverseModel(BaseModelSRL):
     def inverseModel(self, state, next_state):
         """
         Predict action given current state and next state
-        :param state: (th.Tensor)
-        :param next_state: (th.Tensor)
+        :param state: (torch.Tensor)
+        :param next_state: (torch.Tensor)
         :return: probability of each action
         """
         # input: concatenation of state & next state over the 2nd dimension
-        return self.inverse_net(th.cat((state, next_state), dim=1))
+        return self.inverse_net(torch.cat((state, next_state), dim=1))
 
 
 class BaseRewardModel(BaseModelSRL):
@@ -88,8 +88,8 @@ class BaseRewardModel(BaseModelSRL):
     def rewardModel(self, state, next_state):
         """
         Predict reward given current state and next state
-        :param state: (th.Tensor)
-        :param next_state: (th.Tensor)
-        :return: (th.Tensor)
+        :param state: (torch.Tensor)
+        :param next_state: (torch.Tensor)
+        :return: (torch.Tensor)
         """
-        return self.reward_net(th.cat((state, next_state), dim=1))
+        return self.reward_net(torch.cat((state, next_state), dim=1))
