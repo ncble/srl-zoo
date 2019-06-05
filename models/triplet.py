@@ -4,14 +4,14 @@ from .models import *
 
 
 class EmbeddingNet(BaseModelSRL):
-    def __init__(self, state_dim=2, embedding_size=128):
+    def __init__(self, state_dim=2, img_shape=(3,224,224), embedding_size=128):
         """
         Resnet18 + FC layer (Embedding to learn a metric)
         input shape : 2 X 3-channel RGB images of shape (3 x H x W), where H and W are expected to be at least 224
         :param state_dim: (int)
         :embedding_size: (int) size of TCN embedding
         """
-        super(EmbeddingNet, self).__init__()
+        super(EmbeddingNet, self).__init__(state_dim=state_dim, img_shape=img_shape)
         # ResNet 18
         self.conv_layers = models.resnet18(pretrained=True)
         # Freeze params

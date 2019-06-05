@@ -6,8 +6,13 @@ import numpy as np
 import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
+try:
+    ## absolute import
+    from models.priors import ReverseLayerF
+except:
+    ## relative import 
+    from ..models.priors import ReverseLayerF
 
-from models.priors import ReverseLayerF
 from .utils import correlationMatrix
 
 try:
@@ -36,7 +41,7 @@ class LossManager:
         """
         :param name: (str)
         :param weight: (float)
-        :param loss_value: (FloatTensor)
+        :param loss_value: (torch.FloatTensor)
         :return:
         """
         self.names.append(name)
@@ -374,3 +379,30 @@ def tripletLoss(states, p_states, n_states, weight, loss_manager, alpha=0.2):
     tcn_triplet_loss = tcn_triplet_loss.mean()
     loss_manager.addToLosses('triplet_loss', weight, tcn_triplet_loss)
     return weight * tcn_triplet_loss
+
+
+def ganNonSaturateLoss(img_rating, label, weight, loss_manager, name="non_saturate_loss"):
+    binary_crossentropy = th.nn.BCELoss()(img_rating, label)
+    loss_manager.addToLosses(name, weight, binary_crossentropy)
+    return weight * binary_crossentropy
+
+def ganBCEaccuracy(output, label=1):
+    """
+    label (int): 0 or 1
+    """
+    pred = output > 0.5
+    pred = pred.type(th.float)
+    if label:
+        acc = pred.sum() / pred.numel()
+    else:
+        acc = 1. - pred.sum() / pred.numel()
+    return acc
+
+
+def AEboundLoss(state_pred, weight, loss_manager, name='bonud_state_loss', max_val=50):
+    ## state_pred of shape (batch_size, state_dim)
+    A = state_pred ** 2 
+    norm_inf, _ = th.max(A, 1)
+    bound_loss = th.mean(th.relu(norm_inf-max_val))
+    loss_manager.addToLosses(name, weight, bound_loss)
+    return weight * bound_loss

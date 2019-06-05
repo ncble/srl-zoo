@@ -1,5 +1,12 @@
-from pipeline import NO_PAIRS_ERROR
-from utils import printRed
+try:
+    ## absolute import 
+    from pipeline import NO_PAIRS_ERROR
+    from utils import printRed
+except:
+    ## relative import 
+    from ..pipeline import NO_PAIRS_ERROR
+    from ..utils import printRed
+
 
 import torch as th
 import numpy as np

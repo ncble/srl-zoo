@@ -7,43 +7,22 @@ from textwrap import fill
 
 import matplotlib.pyplot as plt
 from matplotlib import cm, colors
-import seaborn as sns
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 
 from utils import parseDataFolder, getInputBuiltin, loadData
-
+from time import time
+import cv2
+# import seaborn as sns
 # Init seaborn
-sns.set()
-INTERACTIVE_PLOT = True
+# sns.set()
 TITLE_MAX_LENGTH = 50
 
 
-def updateDisplayMode():
-    """
-    Enable or disable interactive plot
-    see: http://matplotlib.org/faq/usage_faq.html#what-is-interactive-mode
-    """
-    if INTERACTIVE_PLOT:
-        plt.ion()
-    else:
-        plt.ioff()
-
-
-def pauseOrClose(fig):
-    """
-    :param fig: (matplotlib figure object)
-    """
-    if INTERACTIVE_PLOT:
-        plt.draw()
-        plt.pause(0.0001)  # Small pause to update the plot
-    else:
-        plt.close(fig)
-
 
 def plotRepresentation(states, rewards, name="Learned State Representation",
-                       add_colorbar=True, path=None, fit_pca=False, cmap='coolwarm', true_states=None):
+                       add_colorbar=True, path=None, fit_pca=False, cmap='coolwarm', true_states=None, verbose=1):
     """
     Plot learned state representation using rewards for coloring
     :param states: (np.ndarray)
@@ -55,11 +34,14 @@ def plotRepresentation(states, rewards, name="Learned State Representation",
     :param cmap: (str)
     :param true_states: project a 1D predicted states onto the ground_truth
     """
+    st = time()
+    plt.close('all')
     state_dim = states.shape[1]
     if state_dim != 1 and (fit_pca or state_dim > 3):
         name += " (PCA)"
         n_components = min(state_dim, 3)
-        print("Fitting PCA with {} components".format(n_components))
+        if verbose:
+            print("Fitting PCA with {} components".format(n_components))
         states = PCA(n_components=n_components).fit_transform(states)
     if state_dim == 1:
         # Extend states as 2D:
@@ -70,13 +52,13 @@ def plotRepresentation(states, rewards, name="Learned State Representation",
         plot2dRepresentation(states, rewards, name, add_colorbar, path, cmap)
     else:
         plot3dRepresentation(states, rewards, name, add_colorbar, path, cmap)
-
+    plt.close('all')
+    if verbose:
+        print("Elapsed time : {:.2f}s".format(time()-st))
 
 def plot2dRepresentation(states, rewards, name="Learned State Representation",
                          add_colorbar=True, path=None, cmap='coolwarm', true_states=None):
-    updateDisplayMode()
     fig = plt.figure(name)
-    plt.clf()
     if true_states is not None:
         plt.scatter(true_states[:len(states), 0], true_states[:len(states), 1], s=7, c=states[:, 0], cmap=cmap,
                     linewidths=0.1)
@@ -90,14 +72,11 @@ def plot2dRepresentation(states, rewards, name="Learned State Representation",
         plt.colorbar(label='Reward')
     if path is not None:
         plt.savefig(path)
-    pauseOrClose(fig)
 
 
 def plot3dRepresentation(states, rewards, name="Learned State Representation",
                          add_colorbar=True, path=None, cmap='coolwarm'):
-    updateDisplayMode()
     fig = plt.figure(name)
-    plt.clf()
     ax = fig.add_subplot(111, projection='3d')
     im = ax.scatter(states[:, 0], states[:, 1], states[:, 2],
                     s=7, c=rewards, cmap=cmap, linewidths=0.1)
@@ -110,26 +89,48 @@ def plot3dRepresentation(states, rewards, name="Learned State Representation",
         fig.colorbar(im, label='Reward')
     if path is not None:
         plt.savefig(path)
-    pauseOrClose(fig)
 
 
-def plotImage(image, name='Observation Sample'):
+def plotImage(images, name='Observation Sample', mode='matplotlib', save2dir=None, index=0):
     """
-    Display an image
-    :param image: (np.ndarray) (with values in [0, 1])
+    Display an image or list of images
+    :param images: (np.ndarray) (with values in [0, 1])
     :param name: (str)
     """
     # Reorder channels
-    if image.shape[0] == 3 and len(image.shape) == 3:
+    assert mode in ['matplotlib', 'cv2']
+    if save2dir is not None:
+        figpath = os.path.join(save2dir, "recons_{}.png".format(index))
+    else:
+        figpath = None
+    # if isinstance(images, list):
+    #     images = np.array(images)
+    #     if images.shape[-3] == 3:
+    #         # (..., n_channels, height, width) -> (..., height, width, n_channels)
+    #         images = np.transpose(images, tuple(np.arange(len(images.shape)-3))+(-2,-1,-3))
+    #     else:
+    #         assert images.shape[-1] == 3, "images should be either channels first or last."
+    #     img_shape = images.shape[-3:]
+    #     if len(images.shape) == 5:
+    #         rows, cols = images.shape[:2]
+    #     elif len(images.shape) == 4:
+
+    if images.shape[0] == 3 and len(images.shape) == 3:
         # (n_channels, height, width) -> (height, width, n_channels)
-        image = np.transpose(image, (2, 0, 1))
-    updateDisplayMode()
-    fig = plt.figure(name)
-    plt.imshow(image, interpolation='nearest')
-    # plt.gca().invert_yaxis()
-    plt.xticks([])
-    plt.yticks([])
-    pauseOrClose(fig)
+        images = np.transpose(images, (1, 2, 0))
+    if mode == 'matplotlib':
+        fig = plt.figure(name)
+        plt.axis("off")
+        plt.imshow(images, interpolation='nearest')
+        # plt.xticks([])
+        # plt.yticks([])
+        if figpath is not None:
+            plt.savefig(figpath)
+    elif mode == 'cv2':
+        if figpath is not None:
+            images = 255*images[..., ::-1]
+            cv2.imwrite(figpath, images.astype(int))
+
 
 
 def colorPerEpisode(episode_starts):
@@ -256,57 +257,88 @@ def plotAgainst(states, rewards, title="Representation", fit_pca=False, cmap='co
     plt.show()
 
 
-def plotCorrelation(states_rewards, ground_truth, target_positions, only_print=False):
+# def plotCorrelation(states_rewards, ground_truth, target_positions, only_print=False):
+#     """
+#     Correlation matrix: Target pos/ground truth states vs. States predicted
+
+#     :param states_rewards: (numpy dict)
+#     :param ground_truth: (numpy dict)
+#     :param target_positions: (np.ndarray)
+#     :param only_print: (bool) only print the correlation mesurements (max of correlation for each of
+#         Ground Truth's dimension)
+#     :return: returns the max correlation for each of Ground Truth's dimension with the predicted states
+#             as well as its mean
+#     """
+#     np.set_printoptions(precision=2)
+#     correlation_max_vector = np.array([])
+
+#     for index, ground_truth_name in enumerate([" Agent's position ", "Target Position"]):
+#         if ground_truth_name == " Agent's position ":
+#             key = 'ground_truth_states' if 'ground_truth_states' in ground_truth.keys() else 'arm_states'
+#             x = ground_truth[key][:len(rewards)]
+#         else:
+#             x = target_positions[:len(rewards)]
+#         # adding epsilon in case of little variance in samples of X & Ys
+#         eps = 1e-12
+#         corr = np.corrcoef(x=x + eps, y=states_rewards['states'] + eps, rowvar=0)
+#         fig = plt.figure(figsize=(8, 6))
+#         ax = fig.add_subplot(111)
+#         labels = [r'$\tilde{s}_' + str(i_) + '$' for i_ in range(x.shape[1])]
+#         labels += [r'$s_' + str(i_) + '$' for i_ in range(states_rewards['states'].shape[1])]
+#         cax = ax.matshow(corr, cmap=cmap, vmin=-1, vmax=1)
+#         ax.set_xticklabels([''] + labels)
+#         ax.set_yticklabels([''] + labels)
+#         ax.grid(False)
+#         plt.title(r'Correlation Matrix: S = Predicted states | $\tilde{S}$ = ' + ground_truth_name)
+#         fig.colorbar(cax, label='correlation coefficient')
+#         # Building the vector of max correlation ( a scalar for each of the Ground Truth's dimension)
+#         ground_truth_dim = x.shape[1]
+#         corr_copy = corr
+#         for idx in range(ground_truth_dim):
+#             corr_copy[idx, idx] = 0.0
+#             correlation_max_vector = np.append(correlation_max_vector, max(abs(corr_copy[idx])))
+#     # Printing the max correlation for each of Ground Truth's dimension with the predicted states
+#     # as well as the mean
+#     correlation_scalar = sum(correlation_max_vector)
+#     print("\nCorrelation value of the model's prediction with the Ground Truth:\n Max correlation vector (GTC): {}"
+#           "\n Mean : {:.2f}".format(correlation_max_vector, correlation_scalar / len(correlation_max_vector)))
+#     if not only_print:
+#         plt.show()
+#     return correlation_max_vector, correlation_scalar / len(correlation_max_vector)
+
+def compute_GTC(state_pred, ground_truth, epsilon=1e-8):
     """
-    Correlation matrix: Target pos/ground truth states vs. States predicted
-
-    :param states_rewards: (numpy dict)
-    :param ground_truth: (numpy dict)
-    :param target_positions: (np.ndarray)
-    :param only_print: (bool) only print the correlation mesurements (max of correlation for each of
-        Ground Truth's dimension)
-    :return: returns the max correlation for each of Ground Truth's dimension with the predicted states
-            as well as its mean
+    :param state_pred (np.array) shape (N, state_dim)
+    :param ground_truth (np.array) shape (N, dim), usually dim = 2
+    return GTC (np.array): max of correlation coefficients, shape (dim, )
     """
-    np.set_printoptions(precision=2)
-    correlation_max_vector = np.array([])
+    assert len(state_pred.shape) == len(ground_truth.shape) == 2, "Input should be 2D array"
+    std_sp = np.std(state_pred, axis=0) # shape (state_dim, )
+    std_gt = np.std(ground_truth, axis=0) # shape (dim, )
+    mean_sp = np.mean(state_pred, axis=0)
+    mean_gt = np.mean(ground_truth, axis=0)
+    
+    # scalar product
+    A = (state_pred-mean_sp)[..., None] * (ground_truth-mean_gt)[:, None, :] 
+    corr = np.mean(A, axis=0) # shape (state_dim, dim)
+    std = std_sp[:, None] * std_gt[None, :]
+    corr = corr / (std+epsilon)
+    gtc = np.max(corr, axis=0)
+    for ind, std in enumerate(std_gt):
+        if std < epsilon:
+            gtc[ind] = 0
+    return gtc
+def plotCorrelation(states_rewards, ground_truth, target_positions, only_print=True):
+    states_pred = states_rewards['states']
+    gt_pos = ground_truth['ground_truth_states'] # 'arm_states'
+    gtc = []
+    for gt_states in [gt_pos, target_positions]: ## 
+        gtc.append(compute_GTC(states_pred, gt_states))
+    gtc = np.hstack(gtc)
+    print(gtc)
+    
+    return gtc, np.mean(gtc)
 
-    for index, ground_truth_name in enumerate([" Agent's position ", "Target Position"]):
-        if ground_truth_name == " Agent's position ":
-            key = 'ground_truth_states' if 'ground_truth_states' in ground_truth.keys() else 'arm_states'
-            x = ground_truth[key][:len(rewards)]
-        else:
-            x = target_positions[:len(rewards)]
-
-        # adding epsilon in case of little variance in samples of X & Ys
-        eps = 1e-12
-        corr = np.corrcoef(x=x + eps, y=states_rewards['states'] + eps, rowvar=0)
-        fig = plt.figure(figsize=(8, 6))
-        ax = fig.add_subplot(111)
-        labels = [r'$\tilde{s}_' + str(i_) + '$' for i_ in range(x.shape[1])]
-        labels += [r'$s_' + str(i_) + '$' for i_ in range(states_rewards['states'].shape[1])]
-        cax = ax.matshow(corr, cmap=cmap, vmin=-1, vmax=1)
-        ax.set_xticklabels([''] + labels)
-        ax.set_yticklabels([''] + labels)
-        ax.grid(False)
-        plt.title(r'Correlation Matrix: S = Predicted states | $\tilde{S}$ = ' + ground_truth_name)
-        fig.colorbar(cax, label='correlation coefficient')
-
-        # Building the vector of max correlation ( a scalar for each of the Ground Truth's dimension)
-        ground_truth_dim = x.shape[1]
-        corr_copy = corr
-        for idx in range(ground_truth_dim):
-            corr_copy[idx, idx] = 0.0
-            correlation_max_vector = np.append(correlation_max_vector, max(abs(corr_copy[idx])))
-
-    # Printing the max correlation for each of Ground Truth's dimension with the predicted states
-    # as well as the mean
-    correlation_scalar = sum(correlation_max_vector)
-    print("\nCorrelation value of the model's prediction with the Ground Truth:\n Max correlation vector (GTC): {}"
-          "\n Mean : {:.2f}".format(correlation_max_vector, correlation_scalar / len(correlation_max_vector)))
-    if not only_print:
-        pauseOrClose(fig)
-    return correlation_max_vector, correlation_scalar / len(correlation_max_vector)
 
 
 if __name__ == '__main__':

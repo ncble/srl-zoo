@@ -35,7 +35,7 @@ def getImage(srl_model, state, device):
         net_out = srl_model.decode(state)
         img = detachToNumpy(net_out)[0].T
 
-    img = deNormalize(img, mode="image_net")
+    img = deNormalize(img, mode="tf")
     return img[:, :, ::-1]
 
 

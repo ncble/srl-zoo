@@ -19,13 +19,8 @@ def preprocessInput(x, mode="tf"):
     assert x.shape[-1] == 3, "Color channel must be at the end of the tensor {}".format(x.shape)
     x /= 255.
     if mode == "tf":
-        x[..., 0] -= 0.5
-        x[..., 1] -= 0.5
-        x[..., 2] -= 0.5
-        # Scaling
-        x[..., 0] *= 2.
-        x[..., 1] *= 2.
-        x[..., 2] *= 2.
+        x -= 0.5
+        x *= 2.
     elif mode == "image_net":
         # Zero-center by mean pixel
         x[..., 0] -= 0.485
@@ -35,12 +30,13 @@ def preprocessInput(x, mode="tf"):
         x[..., 0] /= 0.229
         x[..., 1] /= 0.224
         x[..., 2] /= 0.225
+        
     else:
         raise ValueError("Unknown mode for preprocessing")
     return x
 
 
-def deNormalize(x, mode="image_net"):
+def deNormalize(x, mode="tf"):
     """
     deNormalize data (transform input to [0, 1])
     :param x: (np.ndarray)
@@ -51,6 +47,7 @@ def deNormalize(x, mode="image_net"):
     if x.shape[0] == 3 and len(x.shape) == 3:
         # (n_channels, height, width) -> (height, width, n_channels)
         x = np.transpose(x, (1, 2, 0))
+        
     assert x.shape[-1] == 3, "Color channel must be at the end of the tensor {}".format(x.shape)
 
     if mode == "tf":

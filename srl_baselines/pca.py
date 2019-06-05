@@ -56,15 +56,13 @@ def toNumpyMatrix(obs_var):
 
 parser = argparse.ArgumentParser(description='Dimension Reduction using PCA')
 parser.add_argument('-bs', '--batch-size', type=int, default=16, help='batch_size for IncrementalPCA (default: 16)')
-parser.add_argument('--no-display-plots', action='store_true', default=False, help='disables live plots of the representation learned')
+# parser.add_argument('--no-display-plots', action='store_true', default=False, help='disables live plots of the representation learned')
 parser.add_argument('--data-folder', type=str, default="", help='Dataset folder', required=True)
 parser.add_argument('--training-set-size', type=int, default=-1, help='Limit size of the training set (default: -1)')
 parser.add_argument('--state-dim', type=int, default=3, help='State dimension')
 
 input = getInputBuiltin()
 args = parser.parse_args()
-DISPLAY_PLOTS = not args.no_display_plots
-plot_script.INTERACTIVE_PLOT = DISPLAY_PLOTS
 args.data_folder = parseDataFolder(args.data_folder)
 args.method = "pca"
 log_folder = "logs/{}/baselines/{}".format(args.data_folder, getModelName(args))
@@ -98,7 +96,7 @@ print("batch_size = {}".format(batch_size))
 # Create data loader
 minibatchlist = DataLoader.createTestMinibatchList(len(images_path), batch_size)
 # Training = False -> outputs only the current observation, not a tuple
-data_loader = DataLoader(minibatchlist, images_path, n_workers=4, is_training=False)
+data_loader = DataLoader(minibatchlist, images_path, img_shape=None, n_workers=4, is_training=False)
 
 print("Fitting PCA with n_components={}".format(n_components))
 ipca = IncrementalPCA(n_components=n_components)
@@ -124,5 +122,5 @@ path = "{}/learned_states.png".format(log_folder)
 name = "Learned State Representation - {} \n {}".format(args.data_folder, args.method)
 plotRepresentation(predictions, rewards, name, add_colorbar=True, path=path, fit_pca=False)
 
-if DISPLAY_PLOTS:
-    input('\nPress any key to exit.')
+
+input('\nPress any key to exit.')

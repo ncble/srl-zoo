@@ -5,13 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 
-from .custom_layers import GaussianNoiseVariant
-
-try:
-    from preprocessing.preprocess import getNChannels
-except ImportError:
-    from ..preprocessing.preprocess import getNChannels
-
+from torchsummary import summary
 
 class BaseModelSRL(nn.Module):
     """
@@ -19,9 +13,10 @@ class BaseModelSRL(nn.Module):
     It implements a getState method to retrieve a state from observations
     """
 
-    def __init__(self):
+    def __init__(self, state_dim=2, img_shape=(3,224,224)):
         super(BaseModelSRL, self).__init__()
-
+        # Do not define the attribute self.state_dim nor self.img_shape here.
+        # e.g forward/inverse/reward models inherit also from BaseModelSRL
     def getStates(self, observations):
         """
         :param observations: (th.Tensor)
@@ -39,14 +34,15 @@ class BaseModelAutoEncoder(BaseModelSRL):
     It implements a getState method to retrieve a state from observations
     """
 
-    def __init__(self):
-        super(BaseModelAutoEncoder, self).__init__()
-
+    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+        super(BaseModelAutoEncoder, self).__init__(state_dim=state_dim, img_shape=img_shape)
+        self.state_dim = state_dim
+        self.img_shape = img_shape
         # Inspired by ResNet:
         # conv3x3 followed by BatchNorm2d
         self.encoder_conv = nn.Sequential(
             # 224x224xN_CHANNELS -> 112x112x64
-            nn.Conv2d(getNChannels(), 64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.Conv2d(self.img_shape[0], 64, kernel_size=7, stride=2, padding=3, bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),  # 56x56x64
@@ -79,7 +75,7 @@ class BaseModelAutoEncoder(BaseModelSRL):
             nn.BatchNorm2d(64),
             nn.ReLU(True),
 
-            nn.ConvTranspose2d(64, getNChannels(), kernel_size=4, stride=2),  # 224x224xN_CHANNELS
+            nn.ConvTranspose2d(64, self.img_shape[0], kernel_size=4, stride=2),  # 224x224xN_CHANNELS
         )
 
     def getStates(self, observations):
@@ -108,10 +104,7 @@ class BaseModelAutoEncoder(BaseModelSRL):
         :param x: (th.Tensor)
         :return: (th.Tensor)
         """
-        input_shape = x.size()
-        encoded = self.encode(x)
-        decoded = self.decode(encoded).view(input_shape)
-        return encoded, decoded
+        return self.encode(x)
 
 
 class BaseModelVAE(BaseModelAutoEncoder):
@@ -120,15 +113,15 @@ class BaseModelVAE(BaseModelAutoEncoder):
     It implements a getState method to retrieve a state from observations
     """
 
-    def __init__(self):
-        super(BaseModelVAE, self).__init__()
+    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+        super(BaseModelVAE, self).__init__(state_dim=state_dim, img_shape=img_shape)
 
-    def getStates(self, observations):
-        """
-        :param observations: (th.Tensor)
-        :return: (th.Tensor)
-        """
-        return self.encode(observations)[0]
+    # def getStates(self, observations):
+    #     """
+    #     :param observations: (th.Tensor)
+    #     :return: (th.Tensor)
+    #     """
+    #     return self.encode(observations)[0]
 
     def encode(self, x):
         """
@@ -169,6 +162,8 @@ class BaseModelVAE(BaseModelAutoEncoder):
         :param x: (th.Tensor)
         :return: (th.Tensor)
         """
+        return self.encode(x)[0]
+    def compute_tensors(self, x):
         input_shape = x.size()
         mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
@@ -183,13 +178,16 @@ class CustomCNN(BaseModelSRL):
     :param state_dim: (int)
     """
 
-    def __init__(self, state_dim=2):
+    def __init__(self, state_dim=2, img_shape=(3,224,224)):
         super(CustomCNN, self).__init__()
+        self.state_dim = state_dim
+        self.img_shape = img_shape
         # Inspired by ResNet:
         # conv3x3 followed by BatchNorm2d
+        
         self.conv_layers = nn.Sequential(
             # 224x224x3 -> 112x112x64
-            nn.Conv2d(getNChannels(), 64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.Conv2d(self.img_shape[0], 64, kernel_size=7, stride=2, padding=3, bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),  # 56x56x64
@@ -204,8 +202,10 @@ class CustomCNN(BaseModelSRL):
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2)  # 6x6x64
         )
-
-        self.fc = nn.Linear(6 * 6 * 64, state_dim)
+        
+        outshape = summary(self.conv_layers, img_shape, show=False) # [-1, channels, high, width]
+        self.img_height, self.img_width = outshape[-2:]
+        self.fc = nn.Linear(self.img_height * self.img_width * 64, state_dim)
 
     def forward(self, x):
         x = self.conv_layers(x)
@@ -235,3 +235,57 @@ def encodeOneHot(tensor, n_dim):
     """
     encoded_tensor = th.Tensor(tensor.shape[0], n_dim).zero_().to(tensor.device)
     return encoded_tensor.scatter_(1, tensor.data, 1.)
+class GaussianNoise(nn.Module):
+    """
+    Gaussian Noise layer
+    :param batch_size: (int)
+    :param input_dim: (int)
+    :param std: (float) standard deviation
+    :param mean: (float)
+    :param device: (pytorch device)
+    """
+
+    def __init__(self, batch_size, input_dim, device, std, mean=0):
+        super(GaussianNoise, self).__init__()
+        self.std = std
+        self.mean = mean
+        self.device = device
+        self.noise = th.zeros(batch_size, input_dim, device=self.device)
+
+    def forward(self, x):
+        if self.training:
+            self.noise.data.normal_(self.mean, std=self.std)
+            return x + self.noise
+        return x
+
+
+class GaussianNoiseVariant(nn.Module):
+    """
+    Variant of the Gaussian Noise layer that does not require fixed batch_size
+    It recreates a tensor at each call
+    :param device: (pytorch device)
+    :param std: (float) standard deviation
+    :param mean: (float)
+    """
+
+    def __init__(self, device, std, mean=0):
+        super(GaussianNoiseVariant, self).__init__()
+        self.std = std
+        self.mean = mean
+        self.device = device
+
+    def forward(self, x):
+        if self.training:
+            noise = th.zeros(x.size(), device=self.device)
+            noise.data.normal_(self.mean, std=self.std)
+            return x + noise
+        return x
+if __name__ == "__main__":
+    print("Start")
+
+    img_shape = (3,128,128)
+    model = CustomCNN(state_dim=2, img_shape=img_shape)
+    A = summary(model, img_shape)
+    
+
+

@@ -15,8 +15,8 @@ class SRLConvolutionalNetwork(BaseModelSRL):
     :param noise_std: (float)  To avoid NaN (states must be different)
     """
 
-    def __init__(self, state_dim=2, cuda=False, noise_std=1e-6):
-        super(SRLConvolutionalNetwork, self).__init__()
+    def __init__(self, state_dim=2, img_shape=(3,224,224), cuda=False, noise_std=1e-6):
+        super(SRLConvolutionalNetwork, self).__init__(state_dim=state_dim, img_shape=img_shape)
         self.device = th.device("cuda" if th.cuda.is_available() and cuda else "cpu")
         self.resnet = models.resnet18(pretrained=False)
 
@@ -54,8 +54,8 @@ class SRLCustomCNN(BaseModelSRL):
     :param noise_std: (float)  To avoid NaN (states must be different)
     """
 
-    def __init__(self, state_dim=2, cuda=False, noise_std=1e-6):
-        super(SRLCustomCNN, self).__init__()
+    def __init__(self, state_dim=2, img_shape=(3,224,224), cuda=False, noise_std=1e-6):
+        super(SRLCustomCNN, self).__init__(state_dim=state_dim, img_shape=img_shape)
         self.cnn = CustomCNN(state_dim)
         self.device = th.device("cuda" if th.cuda.is_available() and cuda else "cpu")
         self.cnn = self.cnn.to(self.device)
@@ -79,9 +79,9 @@ class SRLDenseNetwork(BaseModelSRL):
     :param n_hidden: (int)
     """
 
-    def __init__(self, input_dim, state_dim=2, cuda=False,
+    def __init__(self, input_dim, state_dim=2, img_shape=(3,224,224), cuda=False,
                  n_hidden=64, noise_std=1e-6):
-        super(SRLDenseNetwork, self).__init__()
+        super(SRLDenseNetwork, self).__init__(state_dim=state_dim, img_shape=img_shape)
 
         self.fc = nn.Sequential(
             nn.Linear(input_dim, n_hidden),
@@ -111,8 +111,8 @@ class SRLLinear(BaseModelSRL):
     :param cuda: (bool)
     """
 
-    def __init__(self, input_dim, state_dim=2, cuda=False):
-        super(SRLLinear, self).__init__()
+    def __init__(self, input_dim, state_dim=2, img_shape=(3,224,224), cuda=False):
+        super(SRLLinear, self).__init__(state_dim=state_dim, img_shape=img_shape)
 
         self.fc = nn.Linear(input_dim, state_dim)
         self.device = th.device("cuda" if th.cuda.is_available() and cuda else "cpu")
@@ -173,3 +173,9 @@ class Discriminator(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+if __name__ == "__main__":
+    print("Start")
+
+    img_shape = (3,128,128)
+    model = SRLConvolutionalNetwork(state_dim=2, cuda=False)
+    A = summary(model, img_shape)

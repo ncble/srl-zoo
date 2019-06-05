@@ -16,11 +16,10 @@ from pipeline import saveConfig
 from plotting.losses_plot import plotLosses
 from plotting.representation_plot import plotRepresentation, plt
 from preprocessing.data_loader import SupervisedDataLoader
-from preprocessing.preprocess import getInputDim
 from train import buildConfig
 from utils import parseDataFolder, createFolder, getInputBuiltin, loadData
 
-DISPLAY_PLOTS = True
+SAVE_PLOTS = True
 EPOCH_FLAG = 1  # Plot every 1 epoch
 BATCH_SIZE = 32
 TEST_BATCH_SIZE = 256
@@ -28,7 +27,7 @@ TEST_BATCH_SIZE = 256
 
 class SupervisedLearning(BaseLearner):
 
-    def __init__(self, state_dim, model_type="resnet", log_folder="logs/default",
+    def __init__(self, state_dim, img_shape, model_type="resnet", log_folder="logs/default",
                  seed=1, learning_rate=0.001, cuda=False):
         """
         :param state_dim: (int)
@@ -46,7 +45,7 @@ class SupervisedLearning(BaseLearner):
         elif model_type in ["cnn", "custom_cnn"]:
             self.model = CustomCNN(self.state_dim)
         elif model_type == "mlp":
-            self.model = DenseNetwork(getInputDim(), self.state_dim)
+            self.model = DenseNetwork(np.prod(img_shape), self.state_dim)
         else:
             raise ValueError("Unknown model: {}".format(model_type))
         print("Using {} model".format(model_type))
@@ -133,12 +132,11 @@ class SupervisedLearning(BaseLearner):
                 print("Epoch {:3}/{}".format(epoch + 1, N_EPOCHS))
                 print("train_loss:{:.4f} val_loss:{:.4f}".format(train_loss, val_loss))
                 print("{:.2f}s/epoch".format((time.time() - start_time) / (epoch + 1)))
-                if DISPLAY_PLOTS:
+                if SAVE_PLOTS:
                     # Optionally plot the current state space
                     plotRepresentation(self.predStatesWithDataLoader(data_loader), rewards, add_colorbar=epoch == 0,
                                        name="Learned State Representation (Training Data)")
-        if DISPLAY_PLOTS:
-            plt.close("Learned State Representation (Training Data)")
+            
 
         # Load best model before predicting states
         self.model.load_state_dict(th.load(best_model_path))
@@ -171,7 +169,7 @@ if __name__ == '__main__':
     parser.add_argument('-bs', '--batch-size', type=int, default=32, help='batch_size (default: 32)')
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.005, help='learning rate (default: 0.005)')
     parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
-    parser.add_argument('--no-display-plots', action='store_true', default=False, help='disables live plots of the representation learned')
+    # parser.add_argument('--no-display-plots', action='store_true', default=False, help='disables live plots of the representation learned')
     parser.add_argument('--model-type', type=str, default="resnet", help='Model architecture (default: "resnet")')
     parser.add_argument('--data-folder', type=str, default="", help='Dataset folder', required=True)
     parser.add_argument('--training-set-size', type=int, default=-1,
@@ -182,8 +180,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and th.cuda.is_available()
-    DISPLAY_PLOTS = not args.no_display_plots
-    plot_script.INTERACTIVE_PLOT = DISPLAY_PLOTS
     N_EPOCHS = args.epochs
     BATCH_SIZE = args.batch_size
     args.data_folder = parseDataFolder(args.data_folder)
@@ -231,5 +227,5 @@ if __name__ == '__main__':
     path = "{}/learned_states.png".format(log_folder)
     plotRepresentation(learned_states, rewards, name, add_colorbar=True, path=path)
 
-    if DISPLAY_PLOTS:
+    if SAVE_PLOTS:
         getInputBuiltin()('\nPress any key to exit.')

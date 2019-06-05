@@ -1,25 +1,30 @@
-from .autoencoders import CNNAutoEncoder, DenseAutoEncoder, LinearAutoEncoder
-from .vae import CNNVAE, DenseVAE
+from .autoencoders import AutoEncoderTrainer
+from .vae import VAETrainer#CNNVAE, DenseVAE
 from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel
 from .priors import SRLConvolutionalNetwork, SRLDenseNetwork, SRLLinear
 from .triplet import EmbeddingNet
-from .models import *
-
-# In case of importing into the SRL repository
+from .gan import GANTrainer # Generator, Discriminator, Encoder, UNet, 
 try:
-    from preprocessing.preprocess import getInputDim
-# In case of importing material from modules.py into the external Robotics RL repository,
-# consider the relative path to the package
-except ImportError:
-    from ..preprocessing.preprocess import getInputDim
+    ## relative import: when executing as a package: python -m ...
+    from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
+    from .base_trainer import BaseTrainer
+    from ..utils import printRed
+    # from ..preprocessing.preprocess import N_CHANNELS
+except:
+    ## absolute import: when executing directly: python train.py ...
+    from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
+    from models.base_trainer import BaseTrainer
+    from utils import printRed
+    # from preprocessing.preprocess import N_CHANNELS
 
 
 class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
-    def __init__(self, state_dim=2, action_dim=6, cuda=False, model_type="custom_cnn", losses=None,
+    def __init__(self, state_dim=2, img_shape=None, action_dim=6, cuda=False, model_type="custom_cnn", losses=None,
                  inverse_model_type="linear"):
         """
         A model that can combine AE/VAE + Inverse + Forward + Reward models
         :param state_dim: (int)
+        :param img_shape: (tuple or None) channels first ! 
         :param action_dim: (int)
         :param cuda: (bool)
         :param model_type: (str)
@@ -33,51 +38,72 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         BaseRewardModel.__init__(self)
 
         self.cuda = cuda
-
+        if img_shape is None:
+            self.img_shape = (3, 224, 224)
+        else:
+            # if N_CHANNELS != img_shape[0]:
+            #     print("="*50)
+            #     printRed("Warning: N_CHANNELS={} is inconsistent with argument img_shape={}.".format(N_CHANNELS, img_shape[0]))
+            #     print("="*50)
+            #     self.img_shape = (N_CHANNELS, ) + img_shape[1:]
+            # else:
+            self.img_shape = img_shape
         self.initForwardNet(state_dim, action_dim)
         self.initInverseNet(state_dim, action_dim, model_type=inverse_model_type)
         self.initRewardNet(state_dim)
-
+        def getInputDim():
+            return np.prod(self.img_shape)
         # Architecture
-        if model_type == "custom_cnn":
-            if "autoencoder" in losses or "dae" in losses:
-                self.model = CNNAutoEncoder(state_dim)
-            elif "vae" in losses:
-                self.model = CNNVAE(state_dim)
-            else:
-                # for losses not depending on specific architecture (supervised, inv, fwd..)
-                self.model = CustomCNN(state_dim)
+        if "autoencoder" in losses or "dae" in losses:
+            self.model = AutoEncoderTrainer(state_dim=state_dim, img_shape=self.img_shape)
+            self.model.build_model(model_type=model_type)
+        elif "vae" in losses:
+            self.model = VAETrainer(state_dim=state_dim, img_shape=self.img_shape)
+            self.model.build_model(model_type=model_type)
+        else:
+            pass
+        if model_type == 'gan':
+            self.model = GANTrainer(img_shape=self.img_shape, state_dim=state_dim)
+            self.model.build_model()
+        elif model_type == 'unet': ## HACK [TODO: only for DEBUG]
+            self.model = AutoEncoderTrainer(state_dim=state_dim, img_shape=self.img_shape)
+            self.model.build_model(model_type='unet')
+        # if model_type == "custom_cnn":
+        #     if "autoencoder" in losses or "dae" in losses:
+        #         self.model = CNNAutoEncoder(state_dim, img_shape=self.img_shape)
+        #     else:
+        #         # for losses not depending on specific architecture (supervised, inv, fwd..)
+        #         self.model = CustomCNN(state_dim, img_shape=self.img_shape)
 
-        elif model_type == "mlp":
-            if "autoencoder" in losses or "dae" in losses:
-                self.model = DenseAutoEncoder(input_dim=getInputDim(), state_dim=state_dim)
-            elif "vae" in losses:
-                self.model = DenseVAE(input_dim=getInputDim(),
-                                      state_dim=state_dim)
-            else:
-                # for losses not depending on specific architecture (supervised, inv, fwd..)
-                self.model = SRLDenseNetwork(getInputDim(), state_dim, cuda=cuda)
+        # elif model_type == "mlp":
+        #     if "autoencoder" in losses or "dae" in losses:
+        #         self.model = DenseAutoEncoder(input_dim=getInputDim(), state_dim=state_dim)
+        #     elif "vae" in losses:
+        #         self.model = DenseVAE(input_dim=getInputDim(),
+        #                               state_dim=state_dim)
+        #     else:
+        #         # for losses not depending on specific architecture (supervised, inv, fwd..)
+        #         self.model = SRLDenseNetwork(getInputDim(), state_dim, cuda=cuda)
 
-        elif model_type == "linear":
-            if "autoencoder" in losses or "dae" in losses:
-                self.model = LinearAutoEncoder(input_dim=getInputDim(), state_dim=state_dim)
-            else:
-                # for losses not depending on specific architecture (supervised, inv, fwd..)
-                self.model = SRLLinear(input_dim=getInputDim(), state_dim=state_dim, cuda=cuda)
+        # elif model_type == "linear":
+        #     if "autoencoder" in losses or "dae" in losses:
+        #         self.model = LinearAutoEncoder(input_dim=getInputDim(), state_dim=state_dim)
+        #     else:
+        #         # for losses not depending on specific architecture (supervised, inv, fwd..)
+        #         self.model = SRLLinear(input_dim=getInputDim(), state_dim=state_dim, cuda=cuda)
 
-        elif model_type == "resnet":
-            self.model = SRLConvolutionalNetwork(state_dim, cuda)
+        # elif model_type == "resnet":
+        #     self.model = SRLConvolutionalNetwork(state_dim, cuda)
+        # elif model_type == "gan":
+        #     self.model = Encoder(self.img_shape, state_dim, spectral_norm=False)
+        #     self.generator = Generator(self.img_shape, state_dim, spectral_norm=True)
+        #     self.discriminator = Discriminator(self.img_shape, state_dim, spectral_norm=True)
+        
+        # # elif: [Add new model here !]
 
-        if losses is not None and "triplet" in losses:
-            # pretrained resnet18 with fixed weights
-            self.model = EmbeddingNet(state_dim)
-
-    def getStates(self, observations):
-        """
-        :param observations: (th.Tensor)
-        :return: (th.Tensor)
-        """
-        return self.model.getStates(observations)
+        # if losses is not None and "triplet" in losses:
+        #     # pretrained resnet18 with fixed weights
+        #     self.model = EmbeddingNet(state_dim)
 
     def forward(self, x):
         if self.model_type == 'linear' or self.model_type == 'mlp':
@@ -98,7 +124,18 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         negative : negative observations (th. Tensor)
         """
         return self.model(anchor), self.model(positive), self.model(negative)
+    
+    def add_forward_loss(self, states, actions_st, next_states, loss_manager):
+        next_states_pred = self.forwardModel(states, actions_st)
+        forwardModelLoss(next_states_pred, next_states, weight=1.0, loss_manager=loss_manager)
 
+    def add_inverse_loss(self, states, actions_st, next_states, loss_manager):
+        actions_pred = self.inverseModel(states, next_states)
+        inverseModelLoss(actions_pred, actions_st, weight=2.0, loss_manager=loss_manager)
+
+    def add_reward_loss(self, states, rewards_st, next_states, loss_manager):
+        rewards_pred = self.rewardModel(states, next_states)
+        rewardModelLoss(rewards_pred, rewards_st, weight=1.0, loss_manager=loss_manager)
 
 class SRLModulesSplit(BaseForwardModel, BaseInverseModel, BaseRewardModel):
     def __init__(self, state_dim=2, action_dim=6, cuda=False, model_type="custom_cnn",

@@ -7,7 +7,7 @@ from __future__ import print_function, division, absolute_import
 
 import argparse
 from collections import OrderedDict
-
+import os
 import numpy as np
 import torch as th
 
@@ -24,6 +24,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='State Representation Learning with PyTorch')
     parser.add_argument('--epochs', type=int, default=30, metavar='N',
                         help='number of epochs to train (default: 30)')
+    parser.add_argument('--img-shape', type=str, default="(3,128,128)",
+                        help='image shape (default "(3,128,128)"')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
     parser.add_argument('--state-dim', type=int, default=2, help='state dimension (default: 2)')
@@ -32,13 +34,16 @@ if __name__ == '__main__':
     parser.add_argument('--training-set-size', type=int, default=-1,
                         help='Limit size (number of samples) of the training set (default: -1)')
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.005, help='learning rate (default: 0.005)')
+    parser.add_argument('-lr_G', '--learning-rate-G', type=float, default=7.0*1e-5, help='learning rate GAN: Generator (default: None)')
+    parser.add_argument('-lr_D', '--learning-rate-D', type=float, default=1.2*1e-5, help='learning rate GAN: Discriminator (default: None)')
     parser.add_argument('--l1-reg', type=float, default=0.0, help='L1 regularization coeff (default: 0.0)')
     parser.add_argument('--l2-reg', type=float, default=0.0, help='L2 regularization coeff (default: 0.0)')
-    parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
+    # parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
+    parser.add_argument('--gpu_num', type=int, default=0, help='CUDA visible device (use CPU if -1, default: 0)')
     parser.add_argument('--no-display-plots', action='store_true', default=False,
                         help='disables live plots of the representation learned')
     parser.add_argument('--model-type', type=str, default="custom_cnn",
-                        choices=['custom_cnn', 'resnet', 'mlp', 'linear'],
+                        choices=['custom_cnn', 'resnet', 'mlp', 'linear', 'gan', 'unet'],
                         help='Model architecture (default: "custom_cnn")')
     parser.add_argument('--inverse-model-type', type=str, default="linear",
                         choices=['mlp', 'linear'],
@@ -52,7 +57,7 @@ if __name__ == '__main__':
                         help='Enable use of multiple camera')
     parser.add_argument('--balanced-sampling', action='store_true', default=False,
                         help='Force balanced sampling for episode independent prior instead of uniform')
-    parser.add_argument('--losses', nargs='+', default=["inverse"], **parseLossArguments(
+    parser.add_argument('--losses', nargs='+', default=[], **parseLossArguments(
         choices=["forward", "inverse", "reward", "priors", "episode-prior", "reward-prior", "triplet",
                  "autoencoder", "vae", "perceptual", "dae", "random"],
         help='The wanted losses. One may also want to specify a weight and dimension '
@@ -65,21 +70,29 @@ if __name__ == '__main__':
                         help='state dimension of the pre-trained dae (default: 200)')
     parser.add_argument('--occlusion-percentage', type=float, default=0.5,
                         help='Max percentage of input occlusion for masks when using DAE')
-
+    parser.add_argument('--figdir', type=str, default=None,
+                        help="Save figure the 'figdir'.")
+    parser.add_argument('--monitor', type=str, default='loss',
+                        choices=['pbar', 'loss'],
+                        help="Monitor mode: either print the losses ('loss') or show the progressbar ('pbar'). (default 'loss')")
+    parser.add_argument('--num-worker', type=int, default=10,
+                        help="Number of CPUs to use for dataloader.")
+    parser.add_argument('--srl-pre-weights', type=str, default=None,
+                        help="Load SRL pretrained weights.")
     args = parser.parse_args()
-    args.cuda = not args.no_cuda and th.cuda.is_available()
+    # args.cuda = not args.no_cuda and th.cuda.is_available()
     args.data_folder = parseDataFolder(args.data_folder)
-    learner.DISPLAY_PLOTS = not args.no_display_plots
+    learner.SAVE_PLOTS = not args.no_display_plots
     learner.N_EPOCHS = args.epochs
     learner.BATCH_SIZE = args.batch_size
     learner.VALIDATION_SIZE = args.val_size
     learner.BALANCED_SAMPLING = args.balanced_sampling
-    plot_script.INTERACTIVE_PLOT = learner.DISPLAY_PLOTS
-
+    learner.N_WORKERS = args.num_worker
+    th.backends.cudnn.benchmark = True
     # Dealing with losses to use
     has_loss_description = [isinstance(loss, tuple) for loss in args.losses]
     has_consistent_description, has_weight, has_splits = False, False, False
-    if all(has_loss_description):
+    if all(has_loss_description) and len(has_loss_description)>0:
         len_description = [len(item_loss) for item_loss in args.losses]
         has_consistent_description = sum(len_description) / len(len_description) == len_description[0]
         has_weight = has_consistent_description
@@ -113,14 +126,21 @@ if __name__ == '__main__':
             "Triplet loss with single view is not supported, please use the --multi-view option"
     args.losses = losses
     args.split_dimensions = split_dimensions
+    if args.img_shape is None:
+        img_shape = None #(3,224,224)
+    else:
+        img_shape = tuple(map(int, args.img_shape[1:-1].split(",")))
     if args.multi_view is True:
         # Setting variables involved data-loading from multiple cameras,
         # involved also in adapting the input layers of NN to that data
         # PS: those are stacked images - 3 if triplet loss, 2 otherwise
         if "triplet" in losses:
-            preprocessing.preprocess.N_CHANNELS = 9
+            # preprocessing.preprocess.N_CHANNELS = 9
+            img_shape = (9, ) + img_shape[1:]
         else:
-            preprocessing.preprocess.N_CHANNELS = 6
+            # preprocessing.preprocess.N_CHANNELS = 6
+            img_shape = (6, ) + img_shape[1:]
+            
 
     assert not ("autoencoder" in losses and "vae" in losses), "Model cannot be both an Autoencoder and a VAE (come on!)"
     assert not (("autoencoder" in losses or "vae" in losses)
@@ -157,7 +177,9 @@ if __name__ == '__main__':
         log_folder, experiment_name = getLogFolderName(exp_config)
         args.log_folder = log_folder
     else:
+        os.makedirs(args.log_folder, exist_ok=True)
         experiment_name = "{}_{}".format(args.model_type, losses)
+
 
     exp_config['log-folder'] = args.log_folder
     exp_config['experiment-name'] = experiment_name
@@ -170,13 +192,13 @@ if __name__ == '__main__':
 
     print('Learning a state representation ... ')
 
-    srl = SRL4robotics(args.state_dim, model_type=args.model_type, inverse_model_type=args.inverse_model_type,
+    srl = SRL4robotics(args.state_dim, img_shape=img_shape, model_type=args.model_type, inverse_model_type=args.inverse_model_type,
                        seed=args.seed,
-                       log_folder=args.log_folder, learning_rate=args.learning_rate,
-                       l1_reg=args.l1_reg, l2_reg=args.l2_reg, cuda=args.cuda, multi_view=args.multi_view,
+                       log_folder=args.log_folder, learning_rate=args.learning_rate, learning_rate_gan=(args.learning_rate_D, args.learning_rate_G),
+                       l1_reg=args.l1_reg, l2_reg=args.l2_reg, cuda=args.gpu_num, multi_view=args.multi_view,
                        losses=losses, losses_weights_dict=losses_weights_dict, n_actions=n_actions, beta=args.beta,
                        split_dimensions=split_dimensions, path_to_dae=args.path_to_dae,
-                       state_dim_dae=args.state_dim_dae, occlusion_percentage=args.occlusion_percentage)
+                       state_dim_dae=args.state_dim_dae, occlusion_percentage=args.occlusion_percentage, pretrained_weights_path=args.srl_pre_weights)
 
     if args.training_set_size > 0:
         limit = args.training_set_size
@@ -187,8 +209,10 @@ if __name__ == '__main__':
 
     # Save configs in log folder
     saveConfig(exp_config, print_config=True)
-
-    loss_history, learned_states, pairs_name_weights = srl.learn(images_path, actions, rewards, episode_starts)
+    if args.figdir is not None:
+        os.makedirs(args.figdir, exist_ok=True)
+    loss_history, learned_states, pairs_name_weights = srl.learn(
+        images_path, actions, rewards, episode_starts, figdir=args.figdir, monitor_mode=args.monitor)
 
     # Update config with weights for each losses
     exp_config['losses_weights'] = pairs_name_weights
@@ -208,5 +232,5 @@ if __name__ == '__main__':
     correlationCall(exp_config, plot=not args.no_display_plots)
 
     # Do not close plot at the end of training
-    if learner.DISPLAY_PLOTS:
-        getInputBuiltin()('\nPress any key to exit.')
+    # if learner.SAVE_PLOTS:
+    #     getInputBuiltin()('\nPress any key to exit.')
