@@ -5,10 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 
-try:
-    from preprocessing.preprocess import getNChannels
-except ImportError:
-    from ..preprocessing.preprocess import getNChannels
 from torchsummary import summary
 
 class BaseModelSRL(nn.Module):
@@ -17,9 +13,10 @@ class BaseModelSRL(nn.Module):
     It implements a getState method to retrieve a state from observations
     """
 
-    def __init__(self):
+    def __init__(self, state_dim=2, img_shape=(3,224,224)):
         super(BaseModelSRL, self).__init__()
-
+        # Do not define the attribute self.state_dim nor self.img_shape here.
+        # e.g forward/inverse/reward models inherit also from BaseModelSRL
     def getStates(self, observations):
         """
         :param observations: (th.Tensor)
@@ -37,14 +34,15 @@ class BaseModelAutoEncoder(BaseModelSRL):
     It implements a getState method to retrieve a state from observations
     """
 
-    def __init__(self):
-        super(BaseModelAutoEncoder, self).__init__()
-
+    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+        super(BaseModelAutoEncoder, self).__init__(state_dim=state_dim, img_shape=img_shape)
+        self.state_dim = state_dim
+        self.img_shape = img_shape
         # Inspired by ResNet:
         # conv3x3 followed by BatchNorm2d
         self.encoder_conv = nn.Sequential(
             # 224x224xN_CHANNELS -> 112x112x64
-            nn.Conv2d(getNChannels(), 64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.Conv2d(self.img_shape[0], 64, kernel_size=7, stride=2, padding=3, bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),  # 56x56x64
@@ -77,7 +75,7 @@ class BaseModelAutoEncoder(BaseModelSRL):
             nn.BatchNorm2d(64),
             nn.ReLU(True),
 
-            nn.ConvTranspose2d(64, getNChannels(), kernel_size=4, stride=2),  # 224x224xN_CHANNELS
+            nn.ConvTranspose2d(64, self.img_shape[0], kernel_size=4, stride=2),  # 224x224xN_CHANNELS
         )
 
     def getStates(self, observations):
@@ -115,8 +113,8 @@ class BaseModelVAE(BaseModelAutoEncoder):
     It implements a getState method to retrieve a state from observations
     """
 
-    def __init__(self):
-        super(BaseModelVAE, self).__init__()
+    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+        super(BaseModelVAE, self).__init__(state_dim=state_dim, img_shape=img_shape)
 
     # def getStates(self, observations):
     #     """
@@ -182,12 +180,14 @@ class CustomCNN(BaseModelSRL):
 
     def __init__(self, state_dim=2, img_shape=(3,224,224)):
         super(CustomCNN, self).__init__()
+        self.state_dim = state_dim
+        self.img_shape = img_shape
         # Inspired by ResNet:
         # conv3x3 followed by BatchNorm2d
         
         self.conv_layers = nn.Sequential(
             # 224x224x3 -> 112x112x64
-            nn.Conv2d(getNChannels(), 64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.Conv2d(self.img_shape[0], 64, kernel_size=7, stride=2, padding=3, bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),  # 56x56x64

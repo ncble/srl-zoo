@@ -9,13 +9,13 @@ try:
     from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
     from .base_trainer import BaseTrainer
     from ..utils import printRed
-    from ..preprocessing.preprocess import N_CHANNELS
+    # from ..preprocessing.preprocess import N_CHANNELS
 except:
     ## absolute import: when executing directly: python train.py ...
     from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
     from models.base_trainer import BaseTrainer
     from utils import printRed
-    from preprocessing.preprocess import N_CHANNELS
+    # from preprocessing.preprocess import N_CHANNELS
 
 
 class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
@@ -39,15 +39,15 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
 
         self.cuda = cuda
         if img_shape is None:
-            self.img_shape = (N_CHANNELS, 224, 224)
+            self.img_shape = (3, 224, 224)
         else:
-            if N_CHANNELS != img_shape[0]:
-                print("="*50)
-                printRed("Warning: N_CHANNELS={} is inconsistent with argument img_shape={}.".format(N_CHANNELS, img_shape[0]))
-                print("="*50)
-                self.img_shape = (N_CHANNELS, ) + img_shape[1:]
-            else:
-                self.img_shape = img_shape
+            # if N_CHANNELS != img_shape[0]:
+            #     print("="*50)
+            #     printRed("Warning: N_CHANNELS={} is inconsistent with argument img_shape={}.".format(N_CHANNELS, img_shape[0]))
+            #     print("="*50)
+            #     self.img_shape = (N_CHANNELS, ) + img_shape[1:]
+            # else:
+            self.img_shape = img_shape
         self.initForwardNet(state_dim, action_dim)
         self.initInverseNet(state_dim, action_dim, model_type=inverse_model_type)
         self.initRewardNet(state_dim)

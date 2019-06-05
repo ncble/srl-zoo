@@ -22,7 +22,7 @@ class LinearAutoEncoder(BaseModelAutoEncoder):
     """
 
     def __init__(self, state_dim, img_shape):
-        super(LinearAutoEncoder, self).__init__()
+        super(LinearAutoEncoder, self).__init__(state_dim, img_shape)
         # BaseModelAutoEncoder.__init__(self)
         self.img_shape = img_shape
         
@@ -62,7 +62,7 @@ class DenseAutoEncoder(BaseModelAutoEncoder):
     """
 
     def __init__(self, state_dim, img_shape):
-        super(DenseAutoEncoder, self).__init__()
+        super(DenseAutoEncoder, self).__init__(state_dim, img_shape)
         # BaseModelAutoEncoder.__init__(self)
         self.img_shape = img_shape
         self.encoder = nn.Sequential(
@@ -109,8 +109,10 @@ class CNNAutoEncoder(BaseModelAutoEncoder):
 
     def __init__(self, state_dim=3, img_shape=(3,224,224)):
         # state_dim=state_dim, img_shape=img_shape
-        super(CNNAutoEncoder, self).__init__()
-        # BaseModelAutoEncoder.__init__(self)
+        super(CNNAutoEncoder, self).__init__(state_dim=state_dim, img_shape=img_shape)
+        self.state_dim = state_dim
+        self.img_shape = img_shape
+
         outshape = summary(self.encoder_conv, img_shape, show=False) # [-1, channels, high, width]
         self.img_height, self.img_width = outshape[-2:]
         
@@ -437,7 +439,7 @@ class UNetAutoEncoder(BaseModelAutoEncoder):
 
     def __init__(self, state_dim=3, img_shape=(3, 224, 224)):
         # state_dim=state_dim, img_shape=img_shape
-        super(UNetAutoEncoder, self).__init__()
+        super(UNetAutoEncoder, self).__init__(state_dim=state_dim, img_shape=img_shape)
         # BaseModelAutoEncoder.__init__(self)
         self.decoder = Generator(img_shape, state_dim, unet_bn=True)
         self.encoder = Encoder(img_shape, state_dim, unet_bn=True)

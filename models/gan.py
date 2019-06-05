@@ -375,7 +375,7 @@ class Encoder(BaseModelSRL):
                  unet_bn=False,
                  unet_drop=0.0,
                  spectral_norm=False):
-        super().__init__()
+        super().__init__(state_dim=state_dim, img_shape=img_shape)
         assert img_shape[0] < 10, "Pytorch uses 'channel first' convention."
         self.state_dim = state_dim
         self.img_shape = img_shape

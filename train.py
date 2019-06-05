@@ -126,14 +126,21 @@ if __name__ == '__main__':
             "Triplet loss with single view is not supported, please use the --multi-view option"
     args.losses = losses
     args.split_dimensions = split_dimensions
+    if args.img_shape is None:
+        img_shape = None #(3,224,224)
+    else:
+        img_shape = tuple(map(int, args.img_shape[1:-1].split(",")))
     if args.multi_view is True:
         # Setting variables involved data-loading from multiple cameras,
         # involved also in adapting the input layers of NN to that data
         # PS: those are stacked images - 3 if triplet loss, 2 otherwise
         if "triplet" in losses:
-            preprocessing.preprocess.N_CHANNELS = 9
+            # preprocessing.preprocess.N_CHANNELS = 9
+            img_shape = (9, ) + img_shape[1:]
         else:
-            preprocessing.preprocess.N_CHANNELS = 6
+            # preprocessing.preprocess.N_CHANNELS = 6
+            img_shape = (6, ) + img_shape[1:]
+            
 
     assert not ("autoencoder" in losses and "vae" in losses), "Model cannot be both an Autoencoder and a VAE (come on!)"
     assert not (("autoencoder" in losses or "vae" in losses)
@@ -185,10 +192,6 @@ if __name__ == '__main__':
 
     print('Learning a state representation ... ')
 
-    if args.img_shape is None:
-        img_shape = None #(3,224,224)
-    else:
-        img_shape = tuple(map(int, args.img_shape[1:-1].split(",")))
     srl = SRL4robotics(args.state_dim, img_shape=img_shape, model_type=args.model_type, inverse_model_type=args.inverse_model_type,
                        seed=args.seed,
                        log_folder=args.log_folder, learning_rate=args.learning_rate, learning_rate_gan=(args.learning_rate_D, args.learning_rate_G),

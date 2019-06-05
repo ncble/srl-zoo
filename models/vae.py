@@ -18,7 +18,7 @@ class DenseVAE(BaseModelVAE):
     """
 
     def __init__(self, state_dim, img_shape):
-        super(DenseVAE, self).__init__()
+        super(DenseVAE, self).__init__(state_dim=state_dim, img_shape=img_shape)
 
         self.img_shape = img_shape
 
@@ -55,7 +55,7 @@ class CNNVAE(BaseModelVAE):
     """
 
     def __init__(self, state_dim=3, img_shape=(3,224,224)):
-        super(CNNVAE, self).__init__()
+        super(CNNVAE, self).__init__(state_dim=state_dim, img_shape=img_shape)
         outshape = summary(self.encoder_conv, img_shape, show=False) # [-1, channels, high, width]
         self.img_height, self.img_width = outshape[-2:]
         self.encoder_fc1 = nn.Linear(self.img_height * self.img_width * 64, state_dim)

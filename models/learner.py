@@ -715,8 +715,8 @@ class SRL4robotics(BaseLearner):
             pred_states = self.predStatesWithDataLoader(dataloader_test)
         pairs_loss_weight = [k for k in zip(loss_manager.names, loss_manager.weights)]
         if self.model_type == 'gan':
-            pairs_loss_weight += [k for k in zip(loss_manager.names, loss_manager_D.weights)]
-            pairs_loss_weight += [k for k in zip(loss_manager.names, loss_manager_G.weights)]
+            pairs_loss_weight += [k for k in zip(loss_manager_D.names, loss_manager_D.weights)]
+            pairs_loss_weight += [k for k in zip(loss_manager_G.names, loss_manager_G.weights)]
             ## [Warning: the following line requires python >= 3.5]
             loss_history = {**loss_history, **loss_history_D, **loss_history_G} 
         return loss_history, pred_states, pairs_loss_weight
