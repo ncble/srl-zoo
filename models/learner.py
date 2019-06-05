@@ -490,10 +490,10 @@ class SRL4robotics(BaseLearner):
                     if self.use_inverse_loss:
                         self.module.add_inverse_loss(states, actions_st, next_states, loss_manager)
                     if self.use_reward_loss:
-                        rewards_st = reward.copy()
+                        rewards_st = np.array(reward).copy()
                         # Removing negative reward
                         rewards_st[rewards_st == -1] = 0
-                        rewards_st = torch.from_numpy(rewards_st.astype(np.float32)).to(self.device) ## [TODO: check dtype]
+                        rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) ## [TODO: check dtype]
                         self.module.add_reward_loss(states, rewards_st, next_states, loss_manager)
                     # if self.use_vae:
                     #     if self.perceptual_similarity_loss:
