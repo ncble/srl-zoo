@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from torch.autograd import Function
 
-from .models import *
+from .base_models import *
 import torch.nn.functional as F
 
 

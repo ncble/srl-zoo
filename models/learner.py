@@ -312,13 +312,13 @@ class SRL4robotics(BaseLearner):
         data_loader_params = {'batch_size': self.batch_size,
                   'shuffle': True,
                   'num_workers': N_WORKERS,
-                #   'drop_last': True,
+                #   'drop_last': False,
                   'pin_memory': False
                   }
         data_loader_params_test = {'batch_size': 128,
                   'shuffle': False,
                   'num_workers': N_WORKERS,
-                #   'drop_last': True,
+                #   'drop_last': False,
                   'pin_memory': False
                   }
         sample_indices = np.arange(len(images_path))

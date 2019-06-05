@@ -1,4 +1,4 @@
-from .models import CustomCNN
+from .base_models import CustomCNN
 from .modules import SRLModules, SRLModulesSplit
 from .priors import SRLConvolutionalNetwork, SRLDenseNetwork, SRLCustomCNN, Discriminator
 from .supervised import ConvolutionalNetwork, DenseNetwork, CustomCNN

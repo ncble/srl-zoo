@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import torch
 
-from .models import *
+from .base_models import *
 
 
 class BaseForwardModel(BaseModelSRL):
