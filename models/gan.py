@@ -246,7 +246,7 @@ class GANTrainer(BaseTrainer):
         reconstruct_obs = self.generator(state_pred)
         reconstruct_obs_next = self.reconstruct(next_obs)
         autoEncoderLoss(obs, reconstruct_obs, next_obs, reconstruct_obs_next, 10000.0, loss_manager)
-        AEboundLoss(state_pred, 1.0, loss_manager) ## NEW [TODO]
+        AEboundLoss(state_pred, 1.0, loss_manager) 
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
     def train_on_batch_D(self, obs, label_valid, label_fake, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):

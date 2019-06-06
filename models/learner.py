@@ -20,7 +20,7 @@ from losses.losses import LossManager, autoEncoderLoss, roboticPriorsLoss, tripl
     perceptualSimilarityLoss, generationLoss, ganNonSaturateLoss
 from losses.utils import findPriorsPairs
 from pipeline import NAN_ERROR
-from plotting.representation_plot import plotRepresentation, plotImage, printGTC # TODO rename printGTC
+from plotting.representation_plot import plotRepresentation, plotImage, printGTC 
 from preprocessing.data_loader import DataLoader, RobotEnvDataset
 from preprocessing.utils import deNormalize
 from utils import printRed, detachToNumpy, printYellow
@@ -506,7 +506,7 @@ class SRL4robotics(BaseLearner):
                         rewards_st = np.array(reward).copy()
                         # Removing negative reward
                         rewards_st[rewards_st == -1] = 0
-                        rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) ## [TODO: check dtype]
+                        rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) 
                         self.module.add_reward_loss(states, rewards_st, next_states, loss_manager)
                     # if self.use_vae:
                     #     if self.perceptual_similarity_loss:
@@ -662,7 +662,7 @@ class SRL4robotics(BaseLearner):
                 loss_history_D = update_loss_history(loss_manager_D, train_loss_D, 0, epoch_batches_D, epoch)
                 loss_history_G = update_loss_history(loss_manager_G, train_loss_G, 0, epoch_batches_G, epoch)
             # Save best model
-            if val_loss < best_error: ## [TODO]
+            if val_loss < best_error:
                 best_error = val_loss
                 torch.save(self.module.state_dict(), best_model_path)
 

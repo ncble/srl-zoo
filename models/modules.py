@@ -10,13 +10,11 @@ try:
     from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
     from .base_trainer import BaseTrainer
     from ..utils import printRed
-    # from ..preprocessing.preprocess import N_CHANNELS
 except:
     ## absolute import: when executing directly: python train.py ...
     from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
     from models.base_trainer import BaseTrainer
     from utils import printRed
-    # from preprocessing.preprocess import N_CHANNELS
 
 
 class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
@@ -42,12 +40,6 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         if img_shape is None:
             self.img_shape = (3, 224, 224)
         else:
-            # if N_CHANNELS != img_shape[0]:
-            #     print("="*50)
-            #     printRed("Warning: N_CHANNELS={} is inconsistent with argument img_shape={}.".format(N_CHANNELS, img_shape[0]))
-            #     print("="*50)
-            #     self.img_shape = (N_CHANNELS, ) + img_shape[1:]
-            # else:
             self.img_shape = img_shape
         self.initForwardNet(state_dim, action_dim)
         self.initInverseNet(state_dim, action_dim, model_type=inverse_model_type)
@@ -62,7 +54,6 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
             self.model = VAETrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type)
         else:
-            ## [TODO Check]
             # for losses not depending on specific architecture (supervised, inverse, forward..)
             self.model = BasicTrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type) ## TODO add the other model_type !!
