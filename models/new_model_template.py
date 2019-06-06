@@ -63,7 +63,6 @@ class NewModelTrainer(BaseTrainer):
         self.img_shape = img_shape
 
     def build_model(self, model_type=None):
-        ## [Warning] It's necessary to define the attribute "self.model"
         self.model = NewModelName(self.state_dim, self.img_shape)
         ## model_type is optional
         # if model_type == "a":
@@ -72,17 +71,26 @@ class NewModelTrainer(BaseTrainer):
         #     self.model = 
         # else:
         #     raise NotImplementedError
-    def train_on_batch(self, X, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
+    def train_on_batch(self, obs, next_obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
         """
-        :param X (could multiple argument: X1, X2, etc) batch of samples/labels
+        :param obs: observation (torch.tensor)
+        :param next_obs: next observation (torch.tensor)
         :param optimizer: pytorch optimizer
         :param loss_manager: collect loss tensors and loss history
         :param valid_model (bool) validation mode (or training mode)
         return loss: (scalar)
         """
-        ## Define the training mechanism here
-        loss = 0
+        ## Define the training mechanism (the additional losses)
+        # --------- Here -----------
+        # e.g. for autoencoder, self.reconstruct call self.model.decode(self.model.encode(x))
+        # decoded_obs = self.reconstruct(obs)
+        # decoded_next_obs = self.reconstruct(next_obs)
+        # autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs, weight=1.0, loss_manager=loss_manager)
+        # # ------------- It's mandatory to update loss/model weights by calling -----------
+        loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
+    def forward(self, x):
+        return self.model(x)
 
     
 

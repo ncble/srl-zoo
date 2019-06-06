@@ -155,7 +155,8 @@ if __name__ == '__main__':
 
 
     print('Loading data ... ')
-    training_data, ground_truth, _, _ = loadData(args.data_folder)
+    
+    training_data, ground_truth, relative_positions, target_positions  = loadData(args.data_folder)
     rewards, episode_starts = training_data['rewards'], training_data['episode_starts']
     actions = training_data['actions']
     # We assume actions are integers
@@ -212,7 +213,8 @@ if __name__ == '__main__':
     if args.figdir is not None:
         os.makedirs(args.figdir, exist_ok=True)
     loss_history, learned_states, pairs_name_weights = srl.learn(
-        images_path, actions, rewards, episode_starts, figdir=args.figdir, monitor_mode=args.monitor)
+        images_path, actions, rewards, episode_starts, figdir=args.figdir, monitor_mode=args.monitor, 
+        ground_truth=ground_truth, relative_positions=relative_positions, target_positions=target_positions)
 
     # Update config with weights for each losses
     exp_config['losses_weights'] = pairs_name_weights

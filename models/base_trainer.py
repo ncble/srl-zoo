@@ -23,7 +23,7 @@ class BaseTrainer(nn.Module):
         loss = loss.item()
         return loss
 
-    
+
 
 if __name__=="__main__":
     print("Start")

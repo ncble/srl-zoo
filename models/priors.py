@@ -11,13 +11,12 @@ class SRLConvolutionalNetwork(BaseModelSRL):
     Convolutional Neural Net for State Representation Learning (SRL)
     input shape : 3-channel RGB images of shape (3 x H x W), where H and W are expected to be at least 224
     :param state_dim: (int)
-    :param cuda: (bool)
+    :param img_shape: (tuple) (3, H, W)
     :param noise_std: (float)  To avoid NaN (states must be different)
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224), cuda=False, noise_std=1e-6):
+    def __init__(self, state_dim=2, img_shape=(3,224,224), noise_std=1e-6):
         super(SRLConvolutionalNetwork, self).__init__(state_dim=state_dim, img_shape=img_shape)
-        self.device = th.device("cuda" if th.cuda.is_available() and cuda else "cpu")
         self.resnet = models.resnet18(pretrained=False)
 
         # Replace the last fully-connected layer
@@ -33,10 +32,9 @@ class SRLConvolutionalNetwork(BaseModelSRL):
             nn.ReLU(inplace=True),
             nn.Linear(64, state_dim),
         )
-        self.resnet = self.resnet.to(self.device)
         # This variant does not require the batch_size
-        self.noise = GaussianNoiseVariant(self.device, noise_std)
-        # self.noise = GaussianNoise(batch_size, state_dim, self.device, noise_std)
+        self.noise = GaussianNoiseVariant(torch.device("cuda"), noise_std) # [TODO, device]
+        # self.noise = GaussianNoise(batch_size, state_dim, torch.device("cuda"), noise_std)
 
     def forward(self, x):
         x = self.resnet(x)
@@ -50,16 +48,14 @@ class SRLCustomCNN(BaseModelSRL):
     Convolutional Neural Network for State Representation Learning
     input shape : 3-channel RGB images of shape (3 x H x W), where H and W are expected to be at least 224
     :param state_dim: (int)
-    :param cuda: (bool)
+    :param img_shape: (tuple) (3, H, W)
     :param noise_std: (float)  To avoid NaN (states must be different)
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224), cuda=False, noise_std=1e-6):
+    def __init__(self, state_dim=2, img_shape=(3,224,224), noise_std=1e-6):
         super(SRLCustomCNN, self).__init__(state_dim=state_dim, img_shape=img_shape)
         self.cnn = CustomCNN(state_dim)
-        self.device = th.device("cuda" if th.cuda.is_available() and cuda else "cpu")
-        self.cnn = self.cnn.to(self.device)
-        self.noise = GaussianNoiseVariant(self.device, noise_std)
+        self.noise = GaussianNoiseVariant(torch.device("cuda"), noise_std) # [TODO, device]
 
     def forward(self, x):
         x = self.cnn(x)
@@ -72,26 +68,23 @@ class SRLDenseNetwork(BaseModelSRL):
     """
     Dense Neural Net for State Representation Learning (SRL)
     input shape : 3-channel RGB images of shape (3 x H x W) (to be consistent with CNN network)
-    :param input_dim: (int) 3 x H x H
     :param state_dim: (int)
+    :param img_shape: (tuple) (3, H, W)
     :param noise_std: (float)  To avoid NaN (states must be different)
-    :param cuda: (bool)
     :param n_hidden: (int)
     """
 
-    def __init__(self, input_dim, state_dim=2, img_shape=(3,224,224), cuda=False,
+    def __init__(self, state_dim=2, img_shape=(3,224,224),
                  n_hidden=64, noise_std=1e-6):
         super(SRLDenseNetwork, self).__init__(state_dim=state_dim, img_shape=img_shape)
 
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, n_hidden),
+            nn.Linear(np.prod(img_shape), n_hidden),
             nn.ReLU(),
             nn.Linear(n_hidden, state_dim)
         )
-
-        self.device = th.device("cuda" if th.cuda.is_available() and cuda else "cpu")
-        self.fc = self.fc.to(self.device)
-        self.noise = GaussianNoiseVariant(self.device, noise_std)
+        self.fc = self.fc
+        self.noise = GaussianNoiseVariant(torch.device("cuda"), noise_std) # [TODO, device]
 
     def forward(self, x):
         # Flatten input
@@ -106,17 +99,15 @@ class SRLLinear(BaseModelSRL):
     """
     Dense Neural Net for State Representation Learning (SRL)
     input shape : 3-channel RGB images of shape (3 x H x W) (to be consistent with CNN network)
-    :param input_dim: (int) 3 x H x H
     :param state_dim: (int)
-    :param cuda: (bool)
+    :param img_shape: (tuple) (3, H, W)
     """
 
-    def __init__(self, input_dim, state_dim=2, img_shape=(3,224,224), cuda=False):
+    def __init__(self, state_dim=2, img_shape=(3,224,224)):
         super(SRLLinear, self).__init__(state_dim=state_dim, img_shape=img_shape)
 
-        self.fc = nn.Linear(input_dim, state_dim)
-        self.device = th.device("cuda" if th.cuda.is_available() and cuda else "cpu")
-        self.fc = self.fc.to(self.device)
+        self.fc = nn.Linear(np.prod(img_shape), state_dim)
+        self.fc = self.fc
 
     def forward(self, x):
         # Flatten input

@@ -20,7 +20,7 @@ from losses.losses import LossManager, autoEncoderLoss, roboticPriorsLoss, tripl
     perceptualSimilarityLoss, generationLoss, ganNonSaturateLoss
 from losses.utils import findPriorsPairs
 from pipeline import NAN_ERROR
-from plotting.representation_plot import plotRepresentation, plotImage
+from plotting.representation_plot import plotRepresentation, plotImage, printGTC # TODO rename printGTC
 from preprocessing.data_loader import DataLoader, RobotEnvDataset
 from preprocessing.utils import deNormalize
 from utils import printRed, detachToNumpy, printYellow
@@ -284,7 +284,14 @@ class SRL4robotics(BaseLearner):
 
         return srl_model, exp_config
 
-    def learn(self, images_path, actions, rewards, episode_starts, figdir=None, monitor_mode='loss', pretrained_weights_path=None):
+    def learn(self, images_path, actions, rewards, episode_starts, 
+                figdir=None, 
+                monitor_mode='loss', 
+                pretrained_weights_path=None,
+                ground_truth=None,
+                relative_positions=None,
+                target_positions=None
+                ):
         """
         Learn a state representation
         :param images_path: (numpy 1D array)
@@ -294,6 +301,10 @@ class SRL4robotics(BaseLearner):
                                 the ith index is True if one episode starts at this frame
         :param figdir: directory path, save figures to the folder.
         :param monitor_mode: options are ['loss', 'pbar']
+        :param ground_truth (dict) for the plots and GTC (ground truth correlation)
+        :param relative_positions: (np.ndarray) for the plots and GTC (ground truth correlation)
+        :param target_positions: (np.ndarray) for the plots and GTC (ground truth correlation)
+        
         :return: (np.ndarray) the learned states for the given observations
         """
 
@@ -345,6 +356,8 @@ class SRL4robotics(BaseLearner):
         dataloader_train = torch.utils.data.DataLoader(train_set, **data_loader_params)
         dataloader_valid = torch.utils.data.DataLoader(valid_set, **data_loader_params)
         dataloader_test  = torch.utils.data.DataLoader(test_set, **data_loader_params_test)
+        # ------- Load ground truth states/ target positions (for plots and GTC) -------
+
         # ========================= Print some info =========================
         # Stats about actions
         action_set = set(actions)
@@ -663,11 +676,13 @@ class SRL4robotics(BaseLearner):
                     with torch.no_grad():
                         # Optionally plot the current state space
                         print("Predicting states for all the observations...")
-                        plotRepresentation(self.predStatesWithDataLoader(dataloader_test), rewards,
+                        state_pred = self.predStatesWithDataLoader(dataloader_test)
+                        plotRepresentation(state_pred, rewards,
                                         #    add_colorbar=epoch == 0,
                                            fit_pca=False,
                                            name="Learned State Representation (Training Data)",
                                            path=os.path.join(figdir_repr, "Epoch_{}.png".format(epoch+1)))
+                        printGTC(state_pred, ground_truth, target_positions)
                         if self.use_autoencoder or self.use_vae or self.use_dae or self.model_type=="unet": #  or self.model_type == 'gan'
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB

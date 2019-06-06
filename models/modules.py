@@ -1,9 +1,10 @@
 from .autoencoders import AutoEncoderTrainer
-from .vae import VAETrainer#CNNVAE, DenseVAE
-from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel
+from .vae import VAETrainer # CNNVAE, DenseVAE
+from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel, BasicTrainer
 from .priors import SRLConvolutionalNetwork, SRLDenseNetwork, SRLLinear
 from .triplet import EmbeddingNet
 from .gan import GANTrainer # Generator, Discriminator, Encoder, UNet, 
+
 try:
     ## relative import: when executing as a package: python -m ...
     from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
@@ -61,7 +62,11 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
             self.model = VAETrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type)
         else:
-            pass
+            ## [TODO Check]
+            # for losses not depending on specific architecture (supervised, inverse, forward..)
+            self.model = BasicTrainer(state_dim=state_dim, img_shape=self.img_shape)
+            self.model.build_model(model_type=model_type) ## TODO add the other model_type !!
+
         if model_type == 'gan': ## [TODO: gan should be a loss type (not model_type) in the future]
             self.model = GANTrainer(img_shape=self.img_shape, state_dim=state_dim)
             self.model.build_model()

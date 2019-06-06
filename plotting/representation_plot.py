@@ -33,6 +33,7 @@ def plotRepresentation(states, rewards, name="Learned State Representation",
     :param fit_pca: (bool)
     :param cmap: (str)
     :param true_states: project a 1D predicted states onto the ground_truth
+    return states: Reduced states (by PCA) with dimension smaller than 3
     """
     st = time()
     plt.close('all')
@@ -55,6 +56,7 @@ def plotRepresentation(states, rewards, name="Learned State Representation",
     plt.close('all')
     if verbose:
         print("Elapsed time : {:.2f}s".format(time()-st))
+    return states
 
 def plot2dRepresentation(states, rewards, name="Learned State Representation",
                          add_colorbar=True, path=None, cmap='coolwarm', true_states=None):
@@ -103,17 +105,6 @@ def plotImage(images, name='Observation Sample', mode='matplotlib', save2dir=Non
         figpath = os.path.join(save2dir, "recons_{}.png".format(index))
     else:
         figpath = None
-    # if isinstance(images, list):
-    #     images = np.array(images)
-    #     if images.shape[-3] == 3:
-    #         # (..., n_channels, height, width) -> (..., height, width, n_channels)
-    #         images = np.transpose(images, tuple(np.arange(len(images.shape)-3))+(-2,-1,-3))
-    #     else:
-    #         assert images.shape[-1] == 3, "images should be either channels first or last."
-    #     img_shape = images.shape[-3:]
-    #     if len(images.shape) == 5:
-    #         rows, cols = images.shape[:2]
-    #     elif len(images.shape) == 4:
 
     if images.shape[0] == 3 and len(images.shape) == 3:
         # (n_channels, height, width) -> (height, width, n_channels)
@@ -122,8 +113,6 @@ def plotImage(images, name='Observation Sample', mode='matplotlib', save2dir=Non
         fig = plt.figure(name)
         plt.axis("off")
         plt.imshow(images, interpolation='nearest')
-        # plt.xticks([])
-        # plt.yticks([])
         if figpath is not None:
             plt.savefig(figpath)
     elif mode == 'cv2':
@@ -260,7 +249,6 @@ def plotAgainst(states, rewards, title="Representation", fit_pca=False, cmap='co
 # def plotCorrelation(states_rewards, ground_truth, target_positions, only_print=False):
 #     """
 #     Correlation matrix: Target pos/ground truth states vs. States predicted
-
 #     :param states_rewards: (numpy dict)
 #     :param ground_truth: (numpy dict)
 #     :param target_positions: (np.ndarray)
@@ -271,7 +259,6 @@ def plotAgainst(states, rewards, title="Representation", fit_pca=False, cmap='co
 #     """
 #     np.set_printoptions(precision=2)
 #     correlation_max_vector = np.array([])
-
 #     for index, ground_truth_name in enumerate([" Agent's position ", "Target Position"]):
 #         if ground_truth_name == " Agent's position ":
 #             key = 'ground_truth_states' if 'ground_truth_states' in ground_truth.keys() else 'arm_states'
@@ -335,10 +322,18 @@ def plotCorrelation(states_rewards, ground_truth, target_positions, only_print=T
     for gt_states in [gt_pos, target_positions]: ## 
         gtc.append(compute_GTC(states_pred, gt_states))
     gtc = np.hstack(gtc)
-    print(gtc)
-    
+    if only_print:
+        print(gtc)
     return gtc, np.mean(gtc)
-
+def printGTC(states_pred, ground_truth, target_positions):
+    np.set_printoptions(precision=3)
+    gt_pos = ground_truth['ground_truth_states'] # 'arm_states'
+    gtc = []
+    for gt_states in [gt_pos, target_positions]: ## 
+        gtc.append(compute_GTC(states_pred, gt_states))
+    gtc = np.hstack(gtc)
+    print("GTC: {}".format(gtc))
+    return gtc, np.mean(gtc)
 
 
 if __name__ == '__main__':
@@ -410,6 +405,7 @@ if __name__ == '__main__':
             log_folder = os.path.dirname(args.input_file)
             with open("{}/gt_correlation.json".format(log_folder), 'w') as f:
                 json.dump(result_dict, f)
+            print(result_dict)
         else:
             plotRepresentation(states_rewards['states'], rewards, cmap=cmap)
         # if not args.print_corr:
