@@ -61,14 +61,18 @@ def main():
     parser = argparse.ArgumentParser(description="latent space enjoy")
     parser.add_argument('--log-dir', default='', type=str, help='directory to load model')
     parser.add_argument('--no-cuda', default=False, action="store_true")
-
+    parser.add_argument('--gpu-num', type=int, default=0, help='CUDA visible device (use CPU if -1, default: 0)')
+    parser.add_argument('--img-shape', type=str, default="(3,128,128)", help='image shape (default "(3,128,128)"')
     args = parser.parse_args()
-    use_cuda = not args.no_cuda
-    device = th.device("cuda" if th.cuda.is_available() and use_cuda else "cpu")
-
-    srl_model, exp_config = SRL4robotics.loadSavedModel(args.log_dir, VALID_MODELS, cuda=use_cuda)
+    # use_cuda = not args.no_cuda
+    # device = th.device("cuda" if th.cuda.is_available() and use_cuda else "cpu")
+    if args.img_shape is None:
+        img_shape = None #(3,224,224)
+    else:
+        img_shape = tuple(map(int, args.img_shape[1:-1].split(",")))
+    srl_model, exp_config = SRL4robotics.loadSavedModel(args.log_dir, VALID_MODELS, cuda=args.gpu_num, img_shape=img_shape)
     # Retrieve the pytorch model
-    srl_model = srl_model.model
+    srl_model = srl_model.module
     losses = exp_config['losses']
     state_dim = exp_config['state-dim']
 
@@ -83,7 +87,11 @@ def main():
 
     if len(loss_dims) == 0:
         print(losses)
-        loss_dims = {losses[0]: state_dim}
+        ## HACK: GAN is currently a model_type not a losses (TODO)
+        if len(losses) == 0:
+            loss_dims = {'gan': state_dim}
+        else:
+            loss_dims = {losses[0]: state_dim}
 
     # Load all the states and images
     data = json.load(open(args.log_dir + 'image_to_state.json'))

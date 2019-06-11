@@ -156,7 +156,7 @@ class SRL4robotics(BaseLearner):
     """
 
     def __init__(self, state_dim, img_shape=None, model_type="resnet", inverse_model_type="linear", log_folder="logs/default",
-                 seed=1, learning_rate=0.001, learning_rate_gan=(None, None), l1_reg=0.0, l2_reg=0.0, cuda=-1,
+                 seed=1, learning_rate=0.001, learning_rate_gan=(0.001, 0.001), l1_reg=0.0, l2_reg=0.0, cuda=-1,
                  multi_view=False, losses=None, losses_weights_dict=None, n_actions=6, beta=1,
                  split_dimensions=-1, path_to_dae=None, state_dim_dae=200, occlusion_percentage=None, pretrained_weights_path=None):
 
@@ -275,12 +275,14 @@ class SRL4robotics(BaseLearner):
         occlusion_percentage = exp_config.get('occlusion-percentage', 0)
 
         difference = set(losses).symmetric_difference(valid_models)
-        assert set(losses).intersection(valid_models) != set(), "Error: Not supported losses " + ", ".join(difference)
+
+        ## HACK: TODO include GAN to the losses and add it to valid_models of ./srl_zoo/evaluation/enjoy_latent.py
+        # assert set(losses).intersection(valid_models) != set(), "Error: Not supported losses " + ", ".join(difference)
 
         srl_model = SRL4robotics(state_dim, img_shape=img_shape, model_type=model_type, cuda=cuda, multi_view=multi_view,
                                  losses=losses, n_actions=n_actions, split_dimensions=split_dimensions,
                                  inverse_model_type=inverse_model_type, occlusion_percentage=occlusion_percentage)
-        srl_model.model.load_state_dict(torch.load(model_path))
+        srl_model.module.load_state_dict(torch.load(model_path))
 
         return srl_model, exp_config
 
