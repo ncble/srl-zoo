@@ -310,7 +310,7 @@ def compute_GTC(state_pred, ground_truth, epsilon=1e-8):
     corr = np.mean(A, axis=0) # shape (state_dim, dim)
     std = std_sp[:, None] * std_gt[None, :]
     corr = corr / (std+epsilon)
-    gtc = np.max(corr, axis=0)
+    gtc = np.max(np.abs(corr), axis=0)
     for ind, std in enumerate(std_gt):
         if std < epsilon:
             gtc[ind] = 0
