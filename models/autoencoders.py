@@ -7,12 +7,12 @@ from torchsummary import summary
 try:
     ## relative import: when executing as a package: python -m ...
     from .base_models import BaseModelAutoEncoder, ConvSN2d, ConvTransposeSN2d, LinearSN, UNet
-    from ..losses.losses import autoEncoderLoss
+    from ..losses.losses import autoEncoderLoss, AEboundLoss
     from .base_trainer import BaseTrainer
 except:
     ## absolute import: when executing directly: python train.py ...
     from models.base_models import BaseModelAutoEncoder, ConvSN2d, ConvTransposeSN2d, LinearSN, UNet
-    from losses.losses import autoEncoderLoss
+    from losses.losses import autoEncoderLoss, AEboundLoss
     from models.base_trainer import BaseTrainer
 
 class LinearAutoEncoder(BaseModelAutoEncoder):
@@ -313,9 +313,12 @@ class AutoEncoderTrainer(BaseTrainer):
 
 
     def train_on_batch(self, obs, next_obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
-        decoded_obs = self.reconstruct(obs)
+        # decoded_obs = self.reconstruct(obs)
+        state_pred = self.encode(obs)
+        decoded_obs = self.decode(state_pred)
         decoded_next_obs = self.reconstruct(next_obs)
         autoEncoderLoss(obs, decoded_obs, next_obs, decoded_next_obs, weight=1.0, loss_manager=loss_manager)
+        AEboundLoss(state_pred, 1.0, loss_manager) ## NEW TODO
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
 
