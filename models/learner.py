@@ -157,7 +157,7 @@ class SRL4robotics(BaseLearner):
 
     def __init__(self, state_dim, img_shape=None, model_type="resnet", inverse_model_type="linear", log_folder="logs/default",
                  seed=1, learning_rate=0.001, learning_rate_gan=(0.001, 0.001), l1_reg=0.0, l2_reg=0.0, cuda=-1,
-                 multi_view=False, losses=None, losses_weights_dict=None, n_actions=6, beta=1,
+                 multi_view=False, losses=None, losses_weights_dict=None, n_actions=4, beta=1,
                  split_dimensions=-1, path_to_dae=None, state_dim_dae=200, occlusion_percentage=None, pretrained_weights_path=None):
 
         super(SRL4robotics, self).__init__(state_dim, BATCH_SIZE, seed, cuda)
@@ -192,7 +192,7 @@ class SRL4robotics(BaseLearner):
             else:
                 self.use_split = False
             self.module = SRLModules(state_dim=self.state_dim, img_shape=self.img_shape, action_dim=self.dim_action, model_type=model_type,
-                                        losses=losses, split_dimensions=split_dimensions, inverse_model_type=inverse_model_type)
+                                        losses=losses, split_dimensions=split_dimensions, inverse_model_type=inverse_model_type, n_hidden_reward=200)
         else:
             raise ValueError("Unknown model: {}".format(model_type))
 
