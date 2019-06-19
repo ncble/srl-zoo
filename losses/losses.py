@@ -160,16 +160,19 @@ def l2Loss(params, weight, loss_manager):
     return weight * l2_loss
 
 
-def rewardModelLoss(rewards_pred, rewards_st, weight, loss_manager):
+def rewardModelLoss(rewards_pred, rewards_st, weight, loss_manager, label_weights, ignore_index=-1):
     """
     Categorical Reward prediction Loss (Cross-entropy)
     :param rewards_pred: predicted reward - categorical (th.Tensor)
     :param rewards_st: (th.Tensor)
     :param weight: coefficient to weight the loss
     :param loss_manager: loss criterion needed to log the loss value (LossManager)
+    :param label_weights (torch tensor) specifies the loss weight for each label. (need to be a torch tensor)
+    :param ignore_index (int, optional) Specifies a target value that is ignored and does not 
+            contribute to the input gradient. 
     :return:
     """
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss(weight=label_weights, ignore_index=ignore_index)
     reward_loss = loss_fn(rewards_pred, target=rewards_st)
     loss_manager.addToLosses('reward_loss', weight, reward_loss)
     return weight * reward_loss

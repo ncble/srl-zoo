@@ -24,7 +24,7 @@ from plotting.representation_plot import plotRepresentation, plotImage, printGTC
 from preprocessing.data_loader import DataLoader, RobotEnvDataset
 from preprocessing.utils import deNormalize
 from utils import printRed, detachToNumpy, printYellow
-from .modules import SRLModules, SRLModulesSplit
+from .modules import SRLModules
 from .priors import Discriminator as PriorDiscriminator
 
 
@@ -187,12 +187,12 @@ class SRL4robotics(BaseLearner):
 
             if isinstance(split_dimensions, OrderedDict) and sum(split_dimensions.values()) > 0:
                 printYellow("Using splitted representation")
-                self.module = SRLModulesSplit(state_dim=self.state_dim, action_dim=self.dim_action,
-                                             model_type=model_type, cuda=cuda, losses=losses,
-                                             split_dimensions=split_dimensions, inverse_model_type=inverse_model_type)
+                self.use_split = True
+                self.split_dimensions = split_dimensions ## TODO UGLY! 
             else:
-                self.module = SRLModules(state_dim=self.state_dim, img_shape=self.img_shape, action_dim=self.dim_action, model_type=model_type,
-                                        cuda=cuda, losses=losses, inverse_model_type=inverse_model_type)
+                self.use_split = False
+            self.module = SRLModules(state_dim=self.state_dim, img_shape=self.img_shape, action_dim=self.dim_action, model_type=model_type,
+                                        losses=losses, split_dimensions=split_dimensions, inverse_model_type=inverse_model_type)
         else:
             raise ValueError("Unknown model: {}".format(model_type))
 
@@ -387,7 +387,7 @@ class SRL4robotics(BaseLearner):
         # if self.use_vae and self.perceptual_similarity_loss and self.path_to_dae is not None:
         #     self.denoiser = SRLModules(state_dim=self.state_dim_dae, img_shape=self.img_shape, action_dim=self.dim_action,
         #                                model_type="custom_cnn",
-        #                                cuda=self.cuda, losses=["dae"])
+        #                                losses=["dae"])
         #     self.denoiser.load_state_dict(torch.load(self.path_to_dae))
         #     self.denoiser.eval()
         #     self.denoiser = self.denoiser.to(self.device)
@@ -496,20 +496,53 @@ class SRL4robotics(BaseLearner):
                     #                     dissimilar_pairs=dissimilar_pairs, same_actions_pairs=same_actions_pairs,
                     #                     weight=self.losses_weights_dict['priors'], loss_manager=loss_manager)
                     # Actions associated to the observations
-                    
                     if self.use_forward_loss or self.use_inverse_loss or self.use_reward_loss:
                         states, next_states = self.module(obs), self.module(next_obs)
                         actions_st = action.view(-1, 1).to(self.device)
-                    if self.use_forward_loss:
-                        self.module.add_forward_loss(states, actions_st, next_states, loss_manager)
-                    if self.use_inverse_loss:
-                        self.module.add_inverse_loss(states, actions_st, next_states, loss_manager)
-                    if self.use_reward_loss:
-                        rewards_st = np.array(reward).copy()
-                        # Removing negative reward
-                        rewards_st[rewards_st == -1] = 0
-                        rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) 
-                        self.module.add_reward_loss(states, rewards_st, next_states, loss_manager)
+                    
+                    if not self.use_split:
+                        if self.use_forward_loss:
+                            self.module.add_forward_loss(states, actions_st, next_states, loss_manager)
+                        if self.use_inverse_loss:
+                            self.module.add_inverse_loss(states, actions_st, next_states, loss_manager)
+                        if self.use_reward_loss:
+                            rewards_st = np.array(reward).copy()
+                            # Removing negative reward
+                            # rewards_st[rewards_st == -1] = 0
+                            rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) 
+                            label_weights = torch.tensor([0.0, 1000.0]).to(self.device)
+                            self.module.add_reward_loss(states, rewards_st, next_states, loss_manager,\
+                                label_weights=label_weights, ignore_index=-1)
+                    else: ## TODO UGLY
+                        split_dim_list = [a for a in list(self.split_dimensions.values()) if a != -1]
+                        states_split_list = torch.split(states, split_dim_list, dim=-1)
+                        next_states_split_list = torch.split(next_states, split_dim_list, dim=-1)
+                        state_index = OrderedDict()
+                        count_index = 0
+                        prev_index = 0
+                        for loss_name, state_split_dim in self.split_dimensions.items():
+                            if state_split_dim==-1:
+                                state_index[loss_name] = prev_index
+                            else:
+                                state_index[loss_name] = count_index
+                                prev_index = count_index
+                                count_index += 1
+                        if self.use_forward_loss:
+                            self.module.add_forward_loss(states_split_list[state_index["forward"]], \
+                                actions_st, next_states_split_list[state_index["forward"]], loss_manager)
+                        if self.use_inverse_loss:
+                            self.module.add_inverse_loss(states_split_list[state_index["inverse"]], \
+                                actions_st, next_states_split_list[state_index["inverse"]], loss_manager)
+                        if self.use_reward_loss:
+                            rewards_st = np.array(reward).copy()
+                            # Removing negative reward
+                            # rewards_st[rewards_st == -1] = 0
+                            rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) 
+                            label_weights = torch.tensor([0.0, 1000.0]).to(self.device)
+                            self.module.add_reward_loss(states_split_list[state_index["reward"]], \
+                                rewards_st, next_states_split_list[state_index["reward"]], loss_manager, \
+                                    label_weights=label_weights, ignore_index=-1)
+                            
                     # if self.use_vae:
                     #     if self.perceptual_similarity_loss:
                     #         perceptualSimilarityLoss(states_denoiser, states_denoiser_predicted, next_states_denoiser,
