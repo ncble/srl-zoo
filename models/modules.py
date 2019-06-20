@@ -67,9 +67,9 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         else:
             state_dim_dict = {"forward": self.state_dim, "inverse": self.state_dim, "reward": self.state_dim}
 
-        self.initForwardNet(state_dim_dict.get("forward", 0), action_dim)
-        self.initInverseNet(state_dim_dict.get("inverse", 0), action_dim, model_type=inverse_model_type)
-        self.initRewardNet(state_dim_dict.get("reward", 0), n_hidden=n_hidden_reward)
+        self.initForwardNet(state_dim_dict.get("forward", self.state_dim), action_dim)
+        self.initInverseNet(state_dim_dict.get("inverse", self.state_dim), action_dim, model_type=inverse_model_type)
+        self.initRewardNet(state_dim_dict.get("reward", self.state_dim), n_hidden=n_hidden_reward)
 
         # Architecture
         if "autoencoder" in losses or "dae" in losses:
