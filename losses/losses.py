@@ -7,10 +7,10 @@ import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
 try:
-    ## absolute import
+    # absolute import
     from models.priors import ReverseLayerF
 except:
-    ## relative import 
+    # relative import
     from ..models.priors import ReverseLayerF
 
 from .utils import correlationMatrix
@@ -65,7 +65,7 @@ class LossManager:
 
 
 def roboticPriorsLoss(states, next_states, minibatch_idx,
-            dissimilar_pairs, same_actions_pairs, weight, loss_manager):
+                      dissimilar_pairs, same_actions_pairs, weight, loss_manager):
     """
     Computing the 4 Robotic priors: Temporal coherence, Causality, Proportionality, Repeatability
     :param states: (th.Tensor)
@@ -82,7 +82,7 @@ def roboticPriorsLoss(states, next_states, minibatch_idx,
 
     state_diff = next_states - states
     state_diff_norm = state_diff.norm(2, dim=1)
-    similarity = lambda x, y: th.exp(-(x - y).norm(2, dim=1) ** 2)
+    def similarity(x, y): return th.exp(-(x - y).norm(2, dim=1) ** 2)
     temp_coherence_loss = (state_diff_norm ** 2).mean()
     causality_loss = similarity(states[dissimilar_pairs[:, 0]],
                                 states[dissimilar_pairs[:, 1]]).mean()
@@ -90,9 +90,9 @@ def roboticPriorsLoss(states, next_states, minibatch_idx,
                              state_diff_norm[same_actions_pairs[:, 1]]) ** 2).mean()
 
     repeatability_loss = (
-            similarity(states[same_actions_pairs[:, 0]], states[same_actions_pairs[:, 1]]) *
-            (state_diff[same_actions_pairs[:, 0]] - state_diff[same_actions_pairs[:, 1]]).norm(2,
-                                                                                               dim=1) ** 2).mean()
+        similarity(states[same_actions_pairs[:, 0]], states[same_actions_pairs[:, 1]]) *
+        (state_diff[same_actions_pairs[:, 0]] - state_diff[same_actions_pairs[:, 1]]).norm(2,
+                                                                                           dim=1) ** 2).mean()
     weights = [1, 1, 1, 1]
     names = ['temp_coherence_loss', 'causality_loss', 'proportionality_loss', 'repeatability_loss']
     losses = [temp_coherence_loss, causality_loss, proportionality_loss, repeatability_loss]
@@ -177,6 +177,7 @@ def rewardModelLoss(rewards_pred, rewards_st, weight, loss_manager, label_weight
     loss_manager.addToLosses('reward_loss', weight, reward_loss)
     return weight * reward_loss
 
+
 def reconstructionLoss(input_image, target_image):
     """
     Reconstruction Loss for Autoencoders
@@ -223,7 +224,7 @@ def generationLoss(decoded, next_decoded, obs, next_obs, weight, loss_manager):
 
 
 def perceptualSimilarityLoss(encoded_real, encoded_prediction, next_encoded_real, next_encoded_prediction,
-                            weight, loss_manager):
+                             weight, loss_manager):
     """
     Perceptual similarity Loss for VAE as in
     # "DARLA: Improving Zero-Shot Transfer in Reinforcement Learning", Higgins et al.
@@ -280,14 +281,14 @@ def mutualInformationLoss(states, rewards_st, weight, loss_manager):
     I = 0
     eps = 1e-10
     p_x = float(1 / np.sqrt(2 * np.pi)) * \
-          th.exp(-th.pow(th.norm((X - th.mean(X, dim=0)) / (th.std(X, dim=0) + eps), 2, dim=1), 2) / 2) + eps
+        th.exp(-th.pow(th.norm((X - th.mean(X, dim=0)) / (th.std(X, dim=0) + eps), 2, dim=1), 2) / 2) + eps
     p_y = float(1 / np.sqrt(2 * np.pi)) * \
-          th.exp(-th.pow(th.norm((Y - th.mean(Y, dim=0)) / (th.std(Y, dim=0) + eps), 2, dim=1), 2) / 2) + eps
+        th.exp(-th.pow(th.norm((Y - th.mean(Y, dim=0)) / (th.std(Y, dim=0) + eps), 2, dim=1), 2) / 2) + eps
     for x in range(X.shape[0]):
         for y in range(Y.shape[0]):
             p_xy = float(1 / np.sqrt(2 * np.pi)) * \
-                   th.exp(-th.pow(th.norm((th.cat([X[x], Y[y]]) - th.mean(th.cat([X, Y], dim=1), dim=0)) /
-                                          (th.std(th.cat([X, Y], dim=1), dim=0) + eps), 2), 2) / 2) + eps
+                th.exp(-th.pow(th.norm((th.cat([X[x], Y[y]]) - th.mean(th.cat([X, Y], dim=1), dim=0)) /
+                                       (th.std(th.cat([X, Y], dim=1), dim=0) + eps), 2), 2) / 2) + eps
             I += p_xy * th.log(p_xy / (p_x[x] * p_y[y]))
 
     mutual_info_loss = th.exp(-I)
@@ -389,6 +390,7 @@ def ganNonSaturateLoss(img_rating, label, weight, loss_manager, name="non_satura
     loss_manager.addToLosses(name, weight, binary_crossentropy)
     return weight * binary_crossentropy
 
+
 def ganBCEaccuracy(output, label=1):
     """
     label (int): 0 or 1
@@ -403,8 +405,8 @@ def ganBCEaccuracy(output, label=1):
 
 
 def AEboundLoss(state_pred, weight, loss_manager, name='bonud_state_loss', max_val=50):
-    ## state_pred of shape (batch_size, state_dim)
-    A = state_pred ** 2 
+    # state_pred of shape (batch_size, state_dim)
+    A = state_pred ** 2
     norm_inf, _ = th.max(A, 1)
     bound_loss = th.mean(th.relu(norm_inf-max_val))
     loss_manager.addToLosses(name, weight, bound_loss)

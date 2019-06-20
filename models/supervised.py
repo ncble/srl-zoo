@@ -13,7 +13,7 @@ class DenseNetwork(BaseModelSRL):
     :param drop_p: (float) Dropout proba
     """
 
-    def __init__(self, input_dim, state_dim=2, img_shape=(3,224,224), n_hidden=64, drop_p=0.5):
+    def __init__(self, input_dim, state_dim=2, img_shape=(3, 224, 224), n_hidden=64, drop_p=0.5):
         super(DenseNetwork, self).__init__(state_dim=state_dim, img_shape=img_shape)
         self.fc1 = nn.Linear(input_dim, n_hidden)
         self.fc2 = nn.Linear(n_hidden, state_dim)
@@ -36,7 +36,7 @@ class ConvolutionalNetwork(BaseModelSRL):
     :param cuda: (bool)
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224), cuda=False):
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224), cuda=False):
         super(ConvolutionalNetwork, self).__init__(state_dim=state_dim, img_shape=img_shape)
         self.resnet = models.resnet18(pretrained=False)
         # Freeze params

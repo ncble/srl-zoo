@@ -20,6 +20,7 @@ from torch.multiprocessing import Queue, Process
 from .utils import preprocessInput
 import torch.utils.data
 
+
 def sample_coordinates(coord_1, max_distance, percentage):
     """
     Sampling from a coordinate A, a second one B within a maximum distance [max_distance X percentage]
@@ -167,12 +168,13 @@ class DataLoader(object):
                                            for image_path in images]
 
                     else:
-                        batch = parallel(delayed(self._makeBatchElement)(image_path, self.multi_view, self.use_triplets, img_shape=self.img_shape) for image_path in images)
+                        batch = parallel(delayed(self._makeBatchElement)(image_path, self.multi_view,
+                                                                         self.use_triplets, img_shape=self.img_shape) for image_path in images)
                         if self.apply_occlusion:
                             batch_noisy = parallel(
                                 delayed(self._makeBatchElement)(image_path, self.multi_view, self.use_triplets,
                                                                 apply_occlusion=self.apply_occlusion,
-                                                                occlusion_percentage=self.occlusion_percentage, 
+                                                                occlusion_percentage=self.occlusion_percentage,
                                                                 img_shape=self.img_shape)
                                 for image_path in images)
 
@@ -184,7 +186,7 @@ class DataLoader(object):
                         batch_obs, batch_next_obs = batch[:len(images) // 2], batch[len(images) // 2:]
                         if batch_noisy is not None:
                             batch_obs_noisy, batch_next_obs_noisy = batch_noisy[:len(images) // 2], \
-                                                                    batch_noisy[len(images) // 2:]
+                                batch_noisy[len(images) // 2:]
                         self.queue.put((minibatch_idx, batch_obs, batch_next_obs,
                                         batch_obs_noisy, batch_next_obs_noisy))
                     else:
@@ -258,7 +260,8 @@ class DataLoader(object):
             if im is None:
                 raise ValueError("tried to load {}.jpg, but it was not found".format(image_path))
 
-            im = preprocessImage(im, img_reshape=img_shape, apply_occlusion=apply_occlusion, occlusion_percentage=occlusion_percentage)
+            im = preprocessImage(im, img_reshape=img_shape, apply_occlusion=apply_occlusion,
+                                 occlusion_percentage=occlusion_percentage)
 
         # Channel first (for pytorch convolutions) + one dim for the batch
         # th.tensor creates a copy
@@ -333,7 +336,8 @@ class SupervisedDataLoader(DataLoader):
                     if self.n_workers <= 1:
                         batch = [self._makeBatchElement(image_path, img_shape=self.img_shape) for image_path in images]
                     else:
-                        batch = parallel(delayed(self._makeBatchElement)(image_path, img_shape=self.img_shape) for image_path in images)
+                        batch = parallel(delayed(self._makeBatchElement)(
+                            image_path, img_shape=self.img_shape) for image_path in images)
 
                     batch = th.cat(batch, dim=0)
 
@@ -375,8 +379,6 @@ class SupervisedDataLoader(DataLoader):
         return minibatchlist, targets
 
 
-
-
 class RobotEnvDataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
     """
@@ -398,17 +400,18 @@ class RobotEnvDataset(torch.utils.data.Dataset):
         Set to True, the dataloader will output both `obs` and `next_obs` (a tuple of th.Tensor)
         Set to false, it will only output one th.Tensor.
     """
-    
-    def __init__(self, sample_indices, images_path, actions, rewards, episode_starts, 
-                 img_shape=None, 
+
+    def __init__(self, sample_indices, images_path, actions, rewards, episode_starts,
+                 img_shape=None,
                  is_training=True,
-                 multi_view=False, 
+                 multi_view=False,
                  use_triplets=False,
-                 apply_occlusion=False, 
+                 apply_occlusion=False,
                  occlusion_percentage=0.5,
-                 dtype=np.float32):
+                 dtype=np.float32,
+                 img_extension="jpg"):
         super(RobotEnvDataset, self).__init__()
-        ## Initialization
+        # Initialization
         self.sample_indices = sample_indices
         self.images_path = images_path
         self.actions = actions
@@ -422,32 +425,34 @@ class RobotEnvDataset(torch.utils.data.Dataset):
         # apply occlusion for training a DAE
         self.apply_occlusion = apply_occlusion
         self.occlusion_percentage = occlusion_percentage
-        
+
         self.dtype = dtype
+        self.img_extension = img_extension
     def __len__(self):
         ## 'Denotes the total number of samples'
         return len(self.sample_indices)
+
     def _get_one_img(self, image_path):
         # self.minibatchlist = minibatchlist
-        image_path = 'data/' + image_path.split('.jpg')[0] ## [TODO]
+        image_path = 'data/' + image_path.split('.{}'.format(self.img_extension))[0]  # [TODO]
 
-        img = cv2.imread("{}.jpg".format(image_path))
+        img = cv2.imread("{}.{}".format(image_path, self.img_extension))
         if img is None:
-            raise ValueError("tried to load {}.jpg, but it was not found".format(image_path))
-        img = preprocessImage(img, img_reshape=self.img_shape, 
-                                    apply_occlusion=self.apply_occlusion, 
-                                    occlusion_percentage=self.occlusion_percentage)
+            raise ValueError("tried to load {}.{}, but it was not found".format(image_path, self.img_extension))
+        img = preprocessImage(img, img_reshape=self.img_shape,
+                              apply_occlusion=self.apply_occlusion,
+                              occlusion_percentage=self.occlusion_percentage)
         img = img.transpose(2, 0, 1)
         return img
 
     def __getitem__(self, index):
-        ## 'Generates one sample of data': (main)
+        # 'Generates one sample of data': (main)
 
-        index = self.sample_indices[index] # real index of samples
-        if (index+1)>=len(self.actions) or self.episode_starts[index + 1]:
+        index = self.sample_indices[index]  # real index of samples
+        if (index+1) >= len(self.actions) or self.episode_starts[index + 1]:
             # the case where 'index' is the end of episode, no next observation.
-            index -= 1 # this may repeat some observations, but the proba is rare.
-        
+            index -= 1  # this may repeat some observations, but the proba is rare.
+
         image_path = self.images_path[index]
         # Load data and get label
         if not self.multi_view:
@@ -460,8 +465,8 @@ class RobotEnvDataset(torch.utils.data.Dataset):
             else:
                 img = self._get_one_img(image_path)
                 return img.astype(self.dtype)
-        
-        else: ## [TODO: not tested yet]
+
+        else:  # [TODO: not tested yet]
             raise NotImplementedError
             images = []
             # Load different view of the same timestep
@@ -498,36 +503,21 @@ class RobotEnvDataset(torch.utils.data.Dataset):
                 images.append(im3)
             img = np.dstack(images)
 
-            return img.astype(self.dtype) #, y.astype(self.dtype)#.to(self.dtype), y.to(self.dtype)
+            return img.astype(self.dtype)  # , y.astype(self.dtype)#.to(self.dtype), y.to(self.dtype)
         return img.astype(self.dtype)
-        
-    # @staticmethod
-    # def preprocessImage(img, resize=None, data_format='channels_first', mode=0):
-    #     # assert data_format=='channels_first' or data_format=='channels_last'
-    #     if resize is not None:
-    #         new = cv2.resize(img, (resize, resize)) ## TODO update for tuple
-    #     else:
-    #         new = img
-    #     if data_format=='channels_first':
-    #         if mode == 0:
-    #             new = new.transpose(2,0,1)
-    #         else:
-    #             new = new.transpose(2,1,0) ## old, wrong, mode 1
-    #     new = new/255
-    #     new = 2*new - 1
-    #     return new
+
     @staticmethod
     def preprocessLabels(labels):
-        ### (Min, Max) labels[:, 0] = (0.452, 3.564)
-        ### (Min, Max) labels[:, 1] = (0.222, 3.795)
-        ## set to Min = 0.15, Max = 3.85
-        val_max = 3.85 #np.max(labels, axis=0)
-        val_min = 0.15 #np.min(labels, axis=0)
-        labels  = (labels - val_min) / (val_max - val_min)
+        # (Min, Max) labels[:, 0] = (0.452, 3.564)
+        # (Min, Max) labels[:, 1] = (0.222, 3.795)
+        # set to Min = 0.15, Max = 3.85
+        val_max = 3.85  # np.max(labels, axis=0)
+        val_min = 0.15  # np.min(labels, axis=0)
+        labels = (labels - val_min) / (val_max - val_min)
         labels = 2*labels - 1
 
         return labels
-    
+
     @staticmethod
     def createTestMinibatchList(n_samples, batch_size):
         """

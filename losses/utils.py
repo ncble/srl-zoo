@@ -1,15 +1,16 @@
 try:
-    ## absolute import 
+    # absolute import
     from pipeline import NO_PAIRS_ERROR
     from utils import printRed
 except:
-    ## relative import 
+    # relative import
     from ..pipeline import NO_PAIRS_ERROR
     from ..utils import printRed
 
 
 import torch as th
 import numpy as np
+
 
 def overSampling(batch_size, m_list, pairs, function_on_pairs, actions, rewards):
     """

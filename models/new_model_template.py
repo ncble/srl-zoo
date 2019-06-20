@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 # torchsummary is optional, but really helpful for scalable model !! (see example below)
-from torchsummary import summary 
+from torchsummary import summary
 try:
     # relative import
     from .base_models import BaseModelSRL
@@ -20,11 +20,12 @@ class NewModelName(BaseModelSRL):
     an observation (image) as input and return encoded state representation.
 
     """
+
     def __init__(self, state_dim, img_shape, *args, **kwargs):
         super().__init__()
-        self.state_dim = state_dim # state dimension
-        self.img_shape = img_shape # input image shape, assert img_shape is "channel first" !!!
-        ## some example
+        self.state_dim = state_dim  # state dimension
+        self.img_shape = img_shape  # input image shape, assert img_shape is "channel first" !!!
+        # some example
         self.dummy_model = nn.Sequential(
             nn.Linear(np.prod(self.img_shape), self.state_dim)
         )
@@ -38,7 +39,7 @@ class NewModelName(BaseModelSRL):
         )
         # Using summary, we can get the output shape of format [-1, channels, high, width] !
         out_shape = summary(self.dummy_model_cnn, img_shape, show=False)  # [-1, channels, high, width]
-        ### Do what you want ....
+        # Do what you want ....
 
         #######################
 
@@ -66,11 +67,12 @@ class NewModelTrainer(BaseTrainer):
         self.model = NewModelName(self.state_dim, self.img_shape)
         ## model_type is optional
         # if model_type == "a":
-        #     self.model = 
+        #     self.model =
         # elif model_type == "b":
-        #     self.model = 
+        #     self.model =
         # else:
         #     raise NotImplementedError
+
     def train_on_batch(self, obs, next_obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
         """
         :param obs: observation (torch.tensor)
@@ -80,7 +82,7 @@ class NewModelTrainer(BaseTrainer):
         :param valid_model (bool) validation mode (or training mode)
         return loss: (scalar)
         """
-        ## Define the training mechanism (the additional losses)
+        # Define the training mechanism (the additional losses)
         # --------- Here -----------
         # e.g. for autoencoder, self.reconstruct call self.model.decode(self.model.encode(x))
         # decoded_obs = self.reconstruct(obs)
@@ -89,10 +91,10 @@ class NewModelTrainer(BaseTrainer):
         # # ------------- It's mandatory to update loss/model weights by calling -----------
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
+
     def forward(self, x):
         return self.model(x)
 
-    
 
-if __name__=="__main__":
+if __name__ == "__main__":
     print("Start")

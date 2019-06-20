@@ -7,16 +7,18 @@ import torchvision.models as models
 from torch.nn.utils import spectral_norm
 from torchsummary import summary
 
+
 class BaseModelSRL(nn.Module):
     """
     Base Class for a SRL network
     It implements a getState method to retrieve a state from observations
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224)):
         super(BaseModelSRL, self).__init__()
         # Do not define the attribute self.state_dim nor self.img_shape here.
         # e.g forward/inverse/reward models inherit also from BaseModelSRL
+
     def getStates(self, observations):
         """
         :param observations: (torch.Tensor)
@@ -34,7 +36,7 @@ class BaseModelAutoEncoder(BaseModelSRL):
     It implements a getState method to retrieve a state from observations
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224)):
         super(BaseModelAutoEncoder, self).__init__(state_dim=state_dim, img_shape=img_shape)
         self.state_dim = state_dim
         self.img_shape = img_shape
@@ -113,7 +115,7 @@ class BaseModelVAE(BaseModelAutoEncoder):
     It implements a getState method to retrieve a state from observations
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224)):
         super(BaseModelVAE, self).__init__(state_dim=state_dim, img_shape=img_shape)
 
     # def getStates(self, observations):
@@ -163,6 +165,7 @@ class BaseModelVAE(BaseModelAutoEncoder):
         :return: (torch.Tensor)
         """
         return self.encode(x)[0]
+
     def compute_tensors(self, x):
         input_shape = x.size()
         mu, logvar = self.encode(x)
@@ -178,13 +181,13 @@ class CustomCNN(BaseModelSRL):
     :param state_dim: (int)
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224)):
         super(CustomCNN, self).__init__()
         self.state_dim = state_dim
         self.img_shape = img_shape
         # Inspired by ResNet:
         # conv3x3 followed by BatchNorm2d
-        
+
         self.conv_layers = nn.Sequential(
             # 224x224x3 -> 112x112x64
             nn.Conv2d(self.img_shape[0], 64, kernel_size=7, stride=2, padding=3, bias=False),
@@ -202,8 +205,8 @@ class CustomCNN(BaseModelSRL):
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2)  # 6x6x64
         )
-        
-        outshape = summary(self.conv_layers, img_shape, show=False) # [-1, channels, high, width]
+
+        outshape = summary(self.conv_layers, img_shape, show=False)  # [-1, channels, high, width]
         self.img_height, self.img_width = outshape[-2:]
         self.fc = nn.Linear(self.img_height * self.img_width * 64, state_dim)
 
@@ -235,6 +238,8 @@ def encodeOneHot(tensor, n_dim):
     """
     encoded_tensor = torch.Tensor(tensor.shape[0], n_dim).zero_().to(tensor.device)
     return encoded_tensor.scatter_(1, tensor.data, 1.)
+
+
 class GaussianNoise(nn.Module):
     """
     Gaussian Noise layer
@@ -447,6 +452,7 @@ class UNetConvBlock(nn.Module):
         out = self.block(x)
         return out
 
+
 class UNetUpBlock(nn.Module):
     def __init__(self, in_size, out_size, up_mode, padding, batch_norm, dropout, spec_norm=False):
         super(UNetUpBlock, self).__init__()
@@ -496,12 +502,11 @@ class UNetUpBlock(nn.Module):
         out = self.conv_block(out)
 
         return out
+
+
 if __name__ == "__main__":
     print("Start")
 
-    img_shape = (3,128,128)
+    img_shape = (3, 128, 128)
     model = CustomCNN(state_dim=2, img_shape=img_shape)
     A = summary(model, img_shape)
-    
-
-

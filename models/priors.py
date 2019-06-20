@@ -15,7 +15,7 @@ class SRLConvolutionalNetwork(BaseModelSRL):
     :param noise_std: (float)  To avoid NaN (states must be different)
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224), noise_std=1e-6):
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224), noise_std=1e-6):
         super(SRLConvolutionalNetwork, self).__init__(state_dim=state_dim, img_shape=img_shape)
         self.resnet = models.resnet18(pretrained=False)
 
@@ -33,7 +33,7 @@ class SRLConvolutionalNetwork(BaseModelSRL):
             nn.Linear(64, state_dim),
         )
         # This variant does not require the batch_size
-        self.noise = GaussianNoiseVariant(torch.device("cuda"), noise_std) # [TODO, device]
+        self.noise = GaussianNoiseVariant(torch.device("cuda"), noise_std)  # [TODO, device]
         # self.noise = GaussianNoise(batch_size, state_dim, torch.device("cuda"), noise_std)
 
     def forward(self, x):
@@ -52,10 +52,10 @@ class SRLCustomCNN(BaseModelSRL):
     :param noise_std: (float)  To avoid NaN (states must be different)
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224), noise_std=1e-6):
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224), noise_std=1e-6):
         super(SRLCustomCNN, self).__init__(state_dim=state_dim, img_shape=img_shape)
         self.cnn = CustomCNN(state_dim)
-        self.noise = GaussianNoiseVariant(torch.device("cuda"), noise_std) # [TODO, device]
+        self.noise = GaussianNoiseVariant(torch.device("cuda"), noise_std)  # [TODO, device]
 
     def forward(self, x):
         x = self.cnn(x)
@@ -74,7 +74,7 @@ class SRLDenseNetwork(BaseModelSRL):
     :param n_hidden: (int)
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224),
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224),
                  n_hidden=64, noise_std=1e-6):
         super(SRLDenseNetwork, self).__init__(state_dim=state_dim, img_shape=img_shape)
 
@@ -84,7 +84,7 @@ class SRLDenseNetwork(BaseModelSRL):
             nn.Linear(n_hidden, state_dim)
         )
         self.fc = self.fc
-        self.noise = GaussianNoiseVariant(torch.device("cuda"), noise_std) # [TODO, device]
+        self.noise = GaussianNoiseVariant(torch.device("cuda"), noise_std)  # [TODO, device]
 
     def forward(self, x):
         # Flatten input
@@ -103,7 +103,7 @@ class SRLLinear(BaseModelSRL):
     :param img_shape: (tuple) (3, H, W)
     """
 
-    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224)):
         super(SRLLinear, self).__init__(state_dim=state_dim, img_shape=img_shape)
 
         self.fc = nn.Linear(np.prod(img_shape), state_dim)
@@ -164,9 +164,11 @@ class Discriminator(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+
+
 if __name__ == "__main__":
     print("Start")
 
-    img_shape = (3,128,128)
+    img_shape = (3, 128, 128)
     model = SRLConvolutionalNetwork(state_dim=2, cuda=False)
     A = summary(model, img_shape)

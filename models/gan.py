@@ -11,11 +11,12 @@ except:
     from models.base_models import BaseModelSRL, ConvSN2d, ConvTransposeSN2d, LinearSN, UNet
     from models.base_trainer import BaseTrainer
     from losses.losses import ganNonSaturateLoss, autoEncoderLoss, ganBCEaccuracy, AEboundLoss
-    
+
+
 class Generator(nn.Module):
     def __init__(self, state_dim, img_shape,
-                 unet_depth=2, # 3
-                 unet_ch=16, # 32
+                 unet_depth=2,  # 3
+                 unet_ch=16,  # 32
                  spectral_norm=False,
                  unet_bn=False,
                  unet_drop=0.0):
@@ -70,7 +71,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, state_dim, img_shape,
                  spectral_norm=False,
-                 d_chs=16): # 32
+                 d_chs=16):  # 32
         super().__init__()
         self.img_shape = img_shape
         self.state_dim = state_dim
@@ -146,14 +147,15 @@ class Discriminator(nn.Module):
         x = self.activations['sigmoid'](x)
         return x
 
+
 class Encoder(BaseModelSRL):
     """
-    
+
     Note: Only Encoder has getStates method.
     """
 
     def __init__(self, state_dim, img_shape,
-                 unet_depth=2, # 3 
+                 unet_depth=2,  # 3
                  unet_ch=16,
                  unet_bn=False,
                  unet_drop=0.0,
@@ -206,7 +208,6 @@ class Encoder(BaseModelSRL):
             #                     ('dense2', nn.Linear(100, self.state_dim, bias=True)),
             #                 ]))
 
-
     def forward(self, x):
         x = self.unet(x)
         for layer in self.modules_list:
@@ -216,7 +217,6 @@ class Encoder(BaseModelSRL):
         x = self.activations['lrelu'](x)
         x = self.last(x)
         return x
-    
 
 
 class GANTrainer(BaseTrainer):
@@ -224,6 +224,7 @@ class GANTrainer(BaseTrainer):
         super().__init__()
         self.img_shape = img_shape
         self.state_dim = state_dim
+
     def build_model(self):
         self.encoder = Encoder(self.state_dim, self.img_shape, spectral_norm=False)
         self.generator = Generator(self.state_dim, self.img_shape, spectral_norm=True)
@@ -231,28 +232,30 @@ class GANTrainer(BaseTrainer):
 
     def forward(self, x):
         return self.encoder(x)
+
     def train_on_batch_E(self, obs, next_obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
         """
         loss_manager will cumulate the loss (pytorch tensor) of e.g. inverse/forward/reward models, etc.
 
         """
-        ## Compute loss tensor (add to the previous losses cumulated in loss_manager)
+        # Compute loss tensor (add to the previous losses cumulated in loss_manager)
         # state_pred, state_pred_next = self.encoder(obs), self.encoder(next_obs)
         # reconstruct_obs, reconstruct_obs_next = self.generator(state_pred), self.generator(state_pred_next)
-        
+
         # reconstruct_obs, reconstruct_obs_next = self.reconstruct(obs), self.reconstruct(next_obs)
 
         state_pred = self.encoder(obs)
         reconstruct_obs = self.generator(state_pred)
         reconstruct_obs_next = self.reconstruct(next_obs)
         autoEncoderLoss(obs, reconstruct_obs, next_obs, reconstruct_obs_next, 10000.0, loss_manager)
-        AEboundLoss(state_pred, 1.0, loss_manager) 
+        AEboundLoss(state_pred, 1.0, loss_manager)
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
+
     def train_on_batch_D(self, obs, label_valid, label_fake, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
         sample_state = torch.randn((obs.size(0), self.state_dim), requires_grad=False).to(device)
         fake_img = self.generator(sample_state)
-        # fake_loss 
+        # fake_loss
         fake_img_rating = self.discriminator(fake_img.detach())
         ganNonSaturateLoss(fake_img_rating, label_fake, weight=1.0, loss_manager=loss_manager, name="ns_loss_D_fake")
         # real_loss
@@ -272,11 +275,9 @@ class GANTrainer(BaseTrainer):
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         acc = ganBCEaccuracy(fake_rating, label=1)
         return loss, acc.item()
+
     def reconstruct(self, x):
         return self.generator(self.encoder(x))
-
-
-
 
 
 if __name__ == "__main__":

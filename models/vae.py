@@ -5,13 +5,15 @@ import torch
 import torch.nn as nn
 from torchsummary import summary
 try:
-    ## relative import: when executing as a package: python -m ...
+    # relative import: when executing as a package: python -m ...
     from .base_models import BaseModelVAE
     from ..losses.losses import kullbackLeiblerLoss, generationLoss
 except:
-    ## absolute import: when executing directly: python train.py ...
+    # absolute import: when executing directly: python train.py ...
     from models.base_models import BaseModelVAE
     from losses.losses import kullbackLeiblerLoss, generationLoss
+
+
 class DenseVAE(BaseModelVAE):
     """
     Dense VAE network
@@ -56,9 +58,9 @@ class CNNVAE(BaseModelVAE):
     :param state_dim: (int)
     """
 
-    def __init__(self, state_dim=3, img_shape=(3,224,224)):
+    def __init__(self, state_dim=3, img_shape=(3, 224, 224)):
         super(CNNVAE, self).__init__(state_dim=state_dim, img_shape=img_shape)
-        outshape = summary(self.encoder_conv, img_shape, show=False) # [-1, channels, high, width]
+        outshape = summary(self.encoder_conv, img_shape, show=False)  # [-1, channels, high, width]
         self.img_height, self.img_width = outshape[-2:]
         self.encoder_fc1 = nn.Linear(self.img_height * self.img_width * 64, state_dim)
         self.encoder_fc2 = nn.Linear(self.img_height * self.img_width * 64, state_dim)
@@ -84,6 +86,7 @@ class CNNVAE(BaseModelVAE):
         z = self.decoder_fc(z)
         z = z.view(z.size(0), 64, self.img_height, self.img_width)
         return self.decoder_conv(z)
+
 
 class VAETrainer(nn.Module):
     def __init__(self, state_dim=2, img_shape=(3, 224, 224)):
@@ -119,17 +122,20 @@ class VAETrainer(nn.Module):
 
     def reconstruct(self, x):
         return self.model.decode(self.model.encode(x)[0])
+
     def encode(self, x):
         return self.model.encode(x)
+
     def decode(self, x):
         return self.model.decode(x)
+
     def forward(self, x):
-        return self.model.encode(x)[0] # or self.model(x)
+        return self.model.encode(x)[0]  # or self.model(x)
 
 
 if __name__ == "__main__":
     print("Start")
 
-    img_shape = (3,128,128)
+    img_shape = (3, 128, 128)
     model = CNNVAE(state_dim=2, img_shape=img_shape)
     A = summary(model, img_shape)

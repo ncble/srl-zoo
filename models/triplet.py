@@ -4,7 +4,7 @@ from .base_models import *
 
 
 class EmbeddingNet(BaseModelSRL):
-    def __init__(self, state_dim=2, img_shape=(3,224,224), embedding_size=128):
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224), embedding_size=128):
         """
         Resnet18 + FC layer (Embedding to learn a metric)
         input shape : 2 X 3-channel RGB images of shape (3 x H x W), where H and W are expected to be at least 224

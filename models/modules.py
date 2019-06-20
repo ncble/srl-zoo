@@ -1,18 +1,18 @@
 from .autoencoders import AutoEncoderTrainer
-from .vae import VAETrainer # CNNVAE, DenseVAE
+from .vae import VAETrainer  # CNNVAE, DenseVAE
 from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel, BasicTrainer
 from .priors import SRLConvolutionalNetwork, SRLDenseNetwork, SRLLinear
 from .triplet import EmbeddingNet
-from .gan import GANTrainer # Generator, Discriminator, Encoder, UNet, 
+from .gan import GANTrainer  # Generator, Discriminator, Encoder, UNet,
 import torch
 from collections import OrderedDict
 try:
-    ## relative import: when executing as a package: python -m ...
+    # relative import: when executing as a package: python -m ...
     from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
     from .base_trainer import BaseTrainer
     from ..utils import printRed
 except:
-    ## absolute import: when executing directly: python train.py ...
+    # absolute import: when executing directly: python train.py ...
     from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
     from models.base_trainer import BaseTrainer
     from utils import printRed
@@ -42,13 +42,13 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
             self.img_shape = (3, 224, 224)
         else:
             self.img_shape = img_shape
-        
-        ## For state splitting ================= TODO UGLY
+
+        # For state splitting ================= TODO UGLY
         self.split_dimensions = split_dimensions
-        if self.split_dimensions is not None:
+        if self.split_dimensions != -1:
             assert len(split_dimensions) == len(losses), "Please specify as many split dimensions {} as losses {} !". \
                 format(len(split_dimensions), len(losses))
-            ## TODO TO DELETE --------------
+            # TODO TO DELETE --------------
             n_dims = sum(split_dimensions.values())
             # Account for shared dimensions
             n_dims += list(split_dimensions.values()).count(-1)
@@ -70,7 +70,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         self.initForwardNet(state_dim_dict.get("forward", 0), action_dim)
         self.initInverseNet(state_dim_dict.get("inverse", 0), action_dim, model_type=inverse_model_type)
         self.initRewardNet(state_dim_dict.get("reward", 0), n_hidden=n_hidden_reward)
-        
+
         # Architecture
         if "autoencoder" in losses or "dae" in losses:
             self.model = AutoEncoderTrainer(state_dim=state_dim, img_shape=self.img_shape)
@@ -81,48 +81,18 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         else:
             # for losses not depending on specific architecture (supervised, inverse, forward..)
             self.model = BasicTrainer(state_dim=state_dim, img_shape=self.img_shape)
-            self.model.build_model(model_type=model_type) ## TODO add the other model_type !!
+            self.model.build_model(model_type=model_type)  # TODO add the other model_type !!
 
-        if model_type == 'gan': ## [TODO: gan should be a loss type (not model_type) in the future]
+        if model_type == 'gan':  # [TODO: gan should be a loss type (not model_type) in the future]
             self.model = GANTrainer(img_shape=self.img_shape, state_dim=state_dim)
             self.model.build_model()
-        elif model_type == 'unet': ## HACK [TODO: only for DEBUG]
+        elif model_type == 'unet':  # HACK [TODO: only for DEBUG]
             self.model = AutoEncoderTrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type='unet')
-        
-        # def getInputDim():
-        #     return np.prod(self.img_shape)
-        # if model_type == "custom_cnn":
-        #     if "autoencoder" in losses or "dae" in losses:
-        #         self.model = CNNAutoEncoder(state_dim, img_shape=self.img_shape)
-        #     else:
-        #         # for losses not depending on specific architecture (supervised, inv, fwd..)
-        #         self.model = CustomCNN(state_dim, img_shape=self.img_shape)
-
-        # elif model_type == "mlp":
-        #     if "autoencoder" in losses or "dae" in losses:
-        #         self.model = DenseAutoEncoder(input_dim=getInputDim(), state_dim=state_dim)
-        #     elif "vae" in losses:
-        #         self.model = DenseVAE(input_dim=getInputDim(),
-        #                               state_dim=state_dim)
-        #     else:
-        #         # for losses not depending on specific architecture (supervised, inv, fwd..)
-        #         self.model = SRLDenseNetwork(getInputDim(), state_dim, cuda=cuda)
-
-        # elif model_type == "linear":
-        #     if "autoencoder" in losses or "dae" in losses:
-        #         self.model = LinearAutoEncoder(input_dim=getInputDim(), state_dim=state_dim)
-        #     else:
-        #         # for losses not depending on specific architecture (supervised, inv, fwd..)
-        #         self.model = SRLLinear(input_dim=getInputDim(), state_dim=state_dim, cuda=cuda)
 
         # elif model_type == "resnet":
         #     self.model = SRLConvolutionalNetwork(state_dim, cuda)
-        # elif model_type == "gan":
-        #     self.model = Encoder(self.img_shape, state_dim, spectral_norm=False)
-        #     self.generator = Generator(self.img_shape, state_dim, spectral_norm=True)
-        #     self.discriminator = Discriminator(self.img_shape, state_dim, spectral_norm=True)
-        
+
         # # elif: [Add new model here !]
 
         # if losses is not None and "triplet" in losses:
@@ -148,7 +118,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         negative : negative observations (torch. Tensor)
         """
         return self.model(anchor), self.model(positive), self.model(negative)
-    
+
     def add_forward_loss(self, states, actions_st, next_states, loss_manager):
         next_states_pred = self.forwardModel(states, actions_st)
         forwardModelLoss(next_states_pred, next_states, weight=1.0, loss_manager=loss_manager)
@@ -159,4 +129,5 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
 
     def add_reward_loss(self, states, rewards_st, next_states, loss_manager, label_weights, ignore_index=-1):
         rewards_pred = self.rewardModel(states, next_states)
-        rewardModelLoss(rewards_pred, rewards_st, weight=100.0, loss_manager=loss_manager, label_weights=label_weights, ignore_index=ignore_index)
+        rewardModelLoss(rewards_pred, rewards_st, weight=100.0, loss_manager=loss_manager,
+                        label_weights=label_weights, ignore_index=ignore_index)

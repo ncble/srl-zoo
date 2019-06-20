@@ -5,6 +5,7 @@ import torch
 from .base_models import *
 from .base_trainer import BaseTrainer
 
+
 class BaseForwardModel(BaseModelSRL):
     def __init__(self):
         self.action_dim = None
@@ -107,7 +108,7 @@ class BasicTrainer(BaseTrainer):
         self.img_shape = img_shape
 
     def build_model(self, model_type=None):
-        
+
         self.model = CustomCNN(self.state_dim, self.img_shape)
 
     def train_on_batch(self, obs, next_obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
@@ -118,9 +119,10 @@ class BasicTrainer(BaseTrainer):
         :param valid_model (bool) validation mode (or training mode)
         return loss: (scalar)
         """
-        ## Define the training mechanism here
+        # Define the training mechanism here
         # ------------- It's mandatory to update loss/model weights by calling -----------
         loss = self.update_nn_weights(optimizer, loss_manager, valid_mode=valid_mode)
         return loss
+
     def forward(self, x):
         return self.model(x)

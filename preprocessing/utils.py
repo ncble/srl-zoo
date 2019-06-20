@@ -30,7 +30,7 @@ def preprocessInput(x, mode="tf"):
         x[..., 0] /= 0.229
         x[..., 1] /= 0.224
         x[..., 2] /= 0.225
-        
+
     else:
         raise ValueError("Unknown mode for preprocessing")
     return x
@@ -47,7 +47,7 @@ def deNormalize(x, mode="tf"):
     if x.shape[0] == 3 and len(x.shape) == 3:
         # (n_channels, height, width) -> (height, width, n_channels)
         x = np.transpose(x, (1, 2, 0))
-        
+
     assert x.shape[-1] == 3, "Color channel must be at the end of the tensor {}".format(x.shape)
 
     if mode == "tf":

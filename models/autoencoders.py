@@ -1,19 +1,20 @@
 from __future__ import print_function, division, absolute_import
 import torch
 import torch.nn as nn
-import torch.nn.functional as F ## HACK TODO DEBUG
+import torch.nn.functional as F  # HACK TODO DEBUG
 import numpy as np
 from torchsummary import summary
 try:
-    ## relative import: when executing as a package: python -m ...
+    # relative import: when executing as a package: python -m ...
     from .base_models import BaseModelAutoEncoder, ConvSN2d, ConvTransposeSN2d, LinearSN, UNet
     from ..losses.losses import autoEncoderLoss
     from .base_trainer import BaseTrainer
 except:
-    ## absolute import: when executing directly: python train.py ...
+    # absolute import: when executing directly: python train.py ...
     from models.base_models import BaseModelAutoEncoder, ConvSN2d, ConvTransposeSN2d, LinearSN, UNet
     from losses.losses import autoEncoderLoss
     from models.base_trainer import BaseTrainer
+
 
 class LinearAutoEncoder(BaseModelAutoEncoder):
     """
@@ -25,7 +26,7 @@ class LinearAutoEncoder(BaseModelAutoEncoder):
         super(LinearAutoEncoder, self).__init__(state_dim, img_shape)
         # BaseModelAutoEncoder.__init__(self)
         self.img_shape = img_shape
-        
+
         self.encoder = nn.Sequential(
             nn.Linear(np.prod(self.img_shape), state_dim),
         )
@@ -107,15 +108,15 @@ class CNNAutoEncoder(BaseModelAutoEncoder):
     :param state_dim: (int)
     """
 
-    def __init__(self, state_dim=3, img_shape=(3,224,224)):
+    def __init__(self, state_dim=3, img_shape=(3, 224, 224)):
         # state_dim=state_dim, img_shape=img_shape
         super(CNNAutoEncoder, self).__init__(state_dim=state_dim, img_shape=img_shape)
         self.state_dim = state_dim
         self.img_shape = img_shape
 
-        outshape = summary(self.encoder_conv, img_shape, show=False) # [-1, channels, high, width]
+        outshape = summary(self.encoder_conv, img_shape, show=False)  # [-1, channels, high, width]
         self.img_height, self.img_width = outshape[-2:]
-        
+
         self.encoder_fc = nn.Sequential(
             nn.Linear(self.img_height * self.img_width * 64, state_dim)
         )
@@ -145,7 +146,7 @@ class CNNAutoEncoder(BaseModelAutoEncoder):
 
 class UNetEncoder(nn.Module):
     """
-    
+
     Note: Only Encoder has getStates method.
     """
 
@@ -193,6 +194,7 @@ class UNetEncoder(nn.Module):
             self.modules_list.append(self.activations['lrelu'])
             self.before_last = nn.Linear(inter_features, 100, bias=True)
             self.last = nn.Linear(100, self.state_dim, bias=True)
+
     def forward(self, x):
         x = self.unet(x)
         for layer in self.modules_list:
@@ -271,6 +273,7 @@ class UNetAutoEncoder(BaseModelAutoEncoder):
         # BaseModelAutoEncoder.__init__(self)
         self.decoder = UNetGenerator(img_shape, state_dim, unet_bn=True)
         self.encoder = UNetEncoder(img_shape, state_dim, unet_bn=True)
+
     def encode(self, x):
         """
         :param x: (th.Tensor)
@@ -285,8 +288,9 @@ class UNetAutoEncoder(BaseModelAutoEncoder):
         """
         return self.decoder(x)
 
+
 class AutoEncoderTrainer(BaseTrainer):
-    def __init__(self, state_dim=2, img_shape=(3,224,224)):
+    def __init__(self, state_dim=2, img_shape=(3, 224, 224)):
         super().__init__()
         # BaseTrainer.__init__(self)
         self.state_dim = state_dim
@@ -311,7 +315,6 @@ class AutoEncoderTrainer(BaseTrainer):
         else:
             raise NotImplementedError("model type: ({}) not supported yet.".format(model_type))
 
-
     def train_on_batch(self, obs, next_obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
         decoded_obs = self.reconstruct(obs)
         decoded_next_obs = self.reconstruct(next_obs)
@@ -321,17 +324,21 @@ class AutoEncoderTrainer(BaseTrainer):
 
     def reconstruct(self, x):
         return self.model.decode(self.model.encode(x))
+
     def encode(self, x):
         return self.model.encode(x)
+
     def decode(self, x):
         return self.model.decode(x)
+
     def forward(self, x):
-        return self.model.encode(x) ## or self.model(x)
+        return self.model.encode(x)  # or self.model(x)
+
 
 if __name__ == "__main__":
     print("Start")
     from torchsummary import summary
-    img_shape = (3,128,128)
+    img_shape = (3, 128, 128)
     model = CNNAutoEncoder(state_dim=2, img_shape=img_shape)
     A = summary(model, img_shape)
     # import ipdb; ipdb.set_trace()

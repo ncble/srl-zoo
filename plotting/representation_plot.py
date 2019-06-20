@@ -20,7 +20,6 @@ import cv2
 TITLE_MAX_LENGTH = 50
 
 
-
 def plotRepresentation(states, rewards, name="Learned State Representation",
                        add_colorbar=True, path=None, fit_pca=False, cmap='coolwarm', true_states=None, verbose=1):
     """
@@ -57,6 +56,7 @@ def plotRepresentation(states, rewards, name="Learned State Representation",
     if verbose:
         print("Elapsed time : {:.2f}s".format(time()-st))
     return states
+
 
 def plot2dRepresentation(states, rewards, name="Learned State Representation",
                          add_colorbar=True, path=None, cmap='coolwarm', true_states=None):
@@ -119,7 +119,6 @@ def plotImage(images, name='Observation Sample', mode='matplotlib', save2dir=Non
         if figpath is not None:
             images = 255*images[..., ::-1]
             cv2.imwrite(figpath, images.astype(int))
-
 
 
 def colorPerEpisode(episode_starts):
@@ -300,14 +299,14 @@ def compute_GTC(state_pred, ground_truth, epsilon=1e-8):
     return GTC (np.array): max of correlation coefficients, shape (dim, )
     """
     assert len(state_pred.shape) == len(ground_truth.shape) == 2, "Input should be 2D array"
-    std_sp = np.std(state_pred, axis=0) # shape (state_dim, )
-    std_gt = np.std(ground_truth, axis=0) # shape (dim, )
+    std_sp = np.std(state_pred, axis=0)  # shape (state_dim, )
+    std_gt = np.std(ground_truth, axis=0)  # shape (dim, )
     mean_sp = np.mean(state_pred, axis=0)
     mean_gt = np.mean(ground_truth, axis=0)
-    
+
     # scalar product
-    A = (state_pred-mean_sp)[..., None] * (ground_truth-mean_gt)[:, None, :] 
-    corr = np.mean(A, axis=0) # shape (state_dim, dim)
+    A = (state_pred-mean_sp)[..., None] * (ground_truth-mean_gt)[:, None, :]
+    corr = np.mean(A, axis=0)  # shape (state_dim, dim)
     std = std_sp[:, None] * std_gt[None, :]
     corr = corr / (std+epsilon)
     gtc = np.max(np.abs(corr), axis=0)
@@ -315,21 +314,25 @@ def compute_GTC(state_pred, ground_truth, epsilon=1e-8):
         if std < epsilon:
             gtc[ind] = 0
     return gtc
+
+
 def plotCorrelation(states_rewards, ground_truth, target_positions, only_print=True):
     states_pred = states_rewards['states']
-    gt_pos = ground_truth['ground_truth_states'] # 'arm_states'
+    gt_pos = ground_truth['ground_truth_states']  # 'arm_states'
     gtc = []
-    for gt_states in [gt_pos, target_positions]: ## 
+    for gt_states in [gt_pos, target_positions]:
         gtc.append(compute_GTC(states_pred, gt_states))
     gtc = np.hstack(gtc)
     if only_print:
         print(gtc)
     return gtc, np.mean(gtc)
+
+
 def printGTC(states_pred, ground_truth, target_positions):
     np.set_printoptions(precision=3)
-    gt_pos = ground_truth['ground_truth_states'] # 'arm_states'
+    gt_pos = ground_truth['ground_truth_states']  # 'arm_states'
     gtc = []
-    for gt_states in [gt_pos, target_positions]: ## 
+    for gt_states in [gt_pos, target_positions]:
         gtc.append(compute_GTC(states_pred, gt_states))
     gtc = np.hstack(gtc)
     print("GTC: {}".format(gtc))

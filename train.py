@@ -34,8 +34,10 @@ if __name__ == '__main__':
     parser.add_argument('--training-set-size', type=int, default=-1,
                         help='Limit size (number of samples) of the training set (default: -1)')
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.005, help='learning rate (default: 0.005)')
-    parser.add_argument('-lr_G', '--learning-rate-G', type=float, default=7.0*1e-5, help='learning rate GAN: Generator (default: None)')
-    parser.add_argument('-lr_D', '--learning-rate-D', type=float, default=1.2*1e-5, help='learning rate GAN: Discriminator (default: None)')
+    parser.add_argument('-lr_G', '--learning-rate-G', type=float, default=7.0 *
+                        1e-5, help='learning rate GAN: Generator (default: None)')
+    parser.add_argument('-lr_D', '--learning-rate-D', type=float, default=1.2*1e-5,
+                        help='learning rate GAN: Discriminator (default: None)')
     parser.add_argument('--l1-reg', type=float, default=0.0, help='L1 regularization coeff (default: 0.0)')
     parser.add_argument('--l2-reg', type=float, default=0.0, help='L2 regularization coeff (default: 0.0)')
     # parser.add_argument('--no-cuda', action='store_true', default=False, help='disables CUDA training')
@@ -92,7 +94,7 @@ if __name__ == '__main__':
     # Dealing with losses to use
     has_loss_description = [isinstance(loss, tuple) for loss in args.losses]
     has_consistent_description, has_weight, has_splits = False, False, False
-    if all(has_loss_description) and len(has_loss_description)>0:
+    if all(has_loss_description) and len(has_loss_description) > 0:
         len_description = [len(item_loss) for item_loss in args.losses]
         has_consistent_description = sum(len_description) / len(len_description) == len_description[0]
         has_weight = has_consistent_description
@@ -127,7 +129,7 @@ if __name__ == '__main__':
     args.losses = losses
     args.split_dimensions = split_dimensions
     if args.img_shape is None:
-        img_shape = None #(3,224,224)
+        img_shape = None  # (3,224,224)
     else:
         img_shape = tuple(map(int, args.img_shape[1:-1].split(",")))
     if args.multi_view is True:
@@ -140,7 +142,6 @@ if __name__ == '__main__':
         else:
             # preprocessing.preprocess.N_CHANNELS = 6
             img_shape = (6, ) + img_shape[1:]
-            
 
     assert not ("autoencoder" in losses and "vae" in losses), "Model cannot be both an Autoencoder and a VAE (come on!)"
     assert not (("autoencoder" in losses or "vae" in losses)
@@ -153,10 +154,9 @@ if __name__ == '__main__':
     assert not ("dae" in losses and "perceptual" in losses), \
         "Please learn the DAE before learning a VAE with the perceptual loss "
 
-
     print('Loading data ... ')
-    
-    training_data, ground_truth, relative_positions, target_positions  = loadData(args.data_folder)
+
+    training_data, ground_truth, relative_positions, target_positions = loadData(args.data_folder)
     rewards, episode_starts = training_data['rewards'], training_data['episode_starts']
     actions = training_data['actions']
     # We assume actions are integers
@@ -181,7 +181,6 @@ if __name__ == '__main__':
         os.makedirs(args.log_folder, exist_ok=True)
         experiment_name = "{}_{}".format(args.model_type, losses)
 
-
     exp_config['log-folder'] = args.log_folder
     exp_config['experiment-name'] = experiment_name
     exp_config['n_actions'] = n_actions
@@ -195,7 +194,8 @@ if __name__ == '__main__':
 
     srl = SRL4robotics(args.state_dim, img_shape=img_shape, model_type=args.model_type, inverse_model_type=args.inverse_model_type,
                        seed=args.seed,
-                       log_folder=args.log_folder, learning_rate=args.learning_rate, learning_rate_gan=(args.learning_rate_D, args.learning_rate_G),
+                       log_folder=args.log_folder, learning_rate=args.learning_rate, learning_rate_gan=(
+                           args.learning_rate_D, args.learning_rate_G),
                        l1_reg=args.l1_reg, l2_reg=args.l2_reg, cuda=args.gpu_num, multi_view=args.multi_view,
                        losses=losses, losses_weights_dict=losses_weights_dict, n_actions=n_actions, beta=args.beta,
                        split_dimensions=split_dimensions, path_to_dae=args.path_to_dae,
@@ -213,7 +213,7 @@ if __name__ == '__main__':
     if args.figdir is not None:
         os.makedirs(args.figdir, exist_ok=True)
     loss_history, learned_states, pairs_name_weights = srl.learn(
-        images_path, actions, rewards, episode_starts, figdir=args.figdir, monitor_mode=args.monitor, 
+        images_path, actions, rewards, episode_starts, figdir=args.figdir, monitor_mode=args.monitor,
         ground_truth=ground_truth, relative_positions=relative_positions, target_positions=target_positions)
 
     # Update config with weights for each losses
