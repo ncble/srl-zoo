@@ -20,7 +20,7 @@ except:
 
 class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
     def __init__(self, state_dim=2, img_shape=None, action_dim=6, model_type="custom_cnn", losses=None,
-                 split_dimensions=None, n_hidden_reward=16, inverse_model_type="linear"):
+                 split_dimensions=None, n_hidden_reward=64, inverse_model_type="linear"):
         """
         A model that can combine AE/VAE + Inverse + Forward + Reward models
         :param state_dim: (int)
@@ -45,7 +45,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         
         ## For state splitting ================= TODO UGLY
         self.split_dimensions = split_dimensions
-        if self.split_dimensions is not None:
+        if self.split_dimensions != -1:
             assert len(split_dimensions) == len(losses), "Please specify as many split dimensions {} as losses {} !". \
                 format(len(split_dimensions), len(losses))
             ## TODO TO DELETE --------------

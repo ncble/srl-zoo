@@ -192,7 +192,7 @@ class SRL4robotics(BaseLearner):
             else:
                 self.use_split = False
             self.module = SRLModules(state_dim=self.state_dim, img_shape=self.img_shape, action_dim=self.dim_action, model_type=model_type,
-                                        losses=losses, split_dimensions=split_dimensions, inverse_model_type=inverse_model_type, n_hidden_reward=200)
+                                        losses=losses, split_dimensions=split_dimensions, inverse_model_type=inverse_model_type, n_hidden_reward=64)
         else:
             raise ValueError("Unknown model: {}".format(model_type))
 
@@ -443,6 +443,7 @@ class SRL4robotics(BaseLearner):
                 else:
                     self.module.train()
                 dataloader = infinite_dataloader(dataloader)#iter(dataloader)
+                # import ipdb; ipdb.set_trace()
                 for iter_ind in range(n_batch_per_epoch):
                     (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
                     obs, next_obs = obs.to(self.device), next_obs.to(self.device)
@@ -510,7 +511,7 @@ class SRL4robotics(BaseLearner):
                             # Removing negative reward
                             # rewards_st[rewards_st == -1] = 0
                             rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) 
-                            label_weights = torch.tensor([0.0, 1000.0]).to(self.device)
+                            label_weights = torch.tensor([0.0, 100.0]).to(self.device)
                             self.module.add_reward_loss(states, rewards_st, next_states, loss_manager,\
                                 label_weights=label_weights, ignore_index=-1)
                     else: ## TODO UGLY
@@ -539,7 +540,12 @@ class SRL4robotics(BaseLearner):
                             # rewards_st[rewards_st == -1] = 0
                             rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) 
                             label_weights = torch.tensor([0.0, 1000.0]).to(self.device)
-                            self.module.add_reward_loss(states_split_list[state_index["reward"]], \
+                            ### TODO TODO TODO TEMPO
+                            # import ipdb; ipdb.set_trace()
+                            # self.module.add_reward_loss(states_split_list[state_index["reward"]], \
+                            #     rewards_st, next_states_split_list[state_index["reward"]], loss_manager, \
+                            #         label_weights=label_weights, ignore_index=-1)
+                            self.module.add_reward_loss((states_split_list[state_index["reward"]]-states_split_list[0])**2, \
                                 rewards_st, next_states_split_list[state_index["reward"]], loss_manager, \
                                     label_weights=label_weights, ignore_index=-1)
                             
@@ -649,6 +655,11 @@ class SRL4robotics(BaseLearner):
                         # Compute weighted average of losses of encoder part (including 'forward'/'inverse'/'reward' models)
                         loss = self.module.model.train_on_batch(
                             obs, next_obs, self.optimizer, loss_manager, valid_mode=valid_mode, device=self.device)
+                        ## Compute reward/inverse acc # TODO TODO TODO
+                        # state_rwd = (states_split_list[state_index["reward"]]-states_split_list[0])**2
+                        # acc_rwd = torch.sum(rewards_st.detach() == torch.argmax(self.module.rewardModel(state_rwd.detach(), state_rwd.detach()), dim=-1))
+                        # acc_rwd = acc_rwd.item()/rewards_st.numel()
+                        acc_rwd = 0
                         ####### Loss: accumulate scalar loss
                         epoch_loss += loss
                         epoch_batches += 1
@@ -662,8 +673,8 @@ class SRL4robotics(BaseLearner):
                         if monitor_mode == 'loss':
                             if iter_ind % ITER_FLAG == 0 or (iter_ind == n_batch_per_epoch-1):
                                 if not valid_mode:
-                                    print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} | (elapsed time: {:.2f}s)".format(
-                                        epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, time.time() - start_time), end="")
+                                    print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f}, rwd_acc: {:.3%} | (elapsed time: {:.2f}s)".format(
+                                        epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, acc_rwd, time.time() - start_time), end="")
                                 else:
                                     print("\r-------(valid): {:.2%}, val_loss: {} | (elapsed time: {:.2f}s)".format(
                                         (iter_ind+1)/n_batch_per_epoch, val_loss_str, time.time() - start_time), end="")
@@ -678,7 +689,7 @@ class SRL4robotics(BaseLearner):
                     current_loss = val_loss if valid_mode else train_loss
                     print("Epoch {:3}/{}, {:.2%}, loss: {:.4f}".format(epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, current_loss))
 
-            
+            # import ipdb; ipdb.set_trace()
             # Even if loss_history is modified by LossManager
             # we make it explicit
             def update_loss_history(loss_manager, train_loss, val_loss, epoch_batches, epoch):
@@ -723,7 +734,7 @@ class SRL4robotics(BaseLearner):
                                                fit_pca=False,
                                                name="Learned State Representation (Training Data)",
                                                path=os.path.join(figdir_repr, "Inv_ep_{}.png".format(epoch+1)))
-                            plotRepresentation(state_pred_split_list[2], rewards,
+                            plotRepresentation((state_pred_split_list[2]-state_pred_split_list[0])**2, rewards,
                                                fit_pca=False,
                                                name="Learned State Representation (Training Data)",
                                                path=os.path.join(figdir_repr, "Rwd_ep_{}.png".format(epoch+1)))
