@@ -76,10 +76,10 @@ class BaseRewardModel(BaseModelSRL):
         super(BaseRewardModel, self).__init__()
 
     def initRewardNet(self, state_dim, n_rewards=2, n_hidden=16):
-        self.reward_net = nn.Sequential(nn.Linear(2 * state_dim, n_hidden),
-                                        nn.ReLU(),
+        self.reward_net = nn.Sequential(nn.Linear(state_dim, n_hidden),
+                                        nn.LeakyReLU(negative_slope=0.2),
                                         nn.Linear(n_hidden, n_hidden),
-                                        nn.ReLU(),
+                                        nn.LeakyReLU(negative_slope=0.2),
                                         nn.Linear(n_hidden, n_rewards))
 
     def forward(self, x):
@@ -92,7 +92,8 @@ class BaseRewardModel(BaseModelSRL):
         :param next_state: (torch.Tensor)
         :return: (torch.Tensor)
         """
-        return self.reward_net(torch.cat((state, next_state), dim=1))
+        # return self.reward_net(torch.cat((state, next_state), dim=1))
+        return self.reward_net(state)
 
 
 class BasicTrainer(BaseTrainer):

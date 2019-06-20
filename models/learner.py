@@ -712,11 +712,21 @@ class SRL4robotics(BaseLearner):
                         # Optionally plot the current state space
                         print("Predicting states for all the observations...")
                         state_pred = self.predStatesWithDataLoader(dataloader_test)
-                        plotRepresentation(state_pred, rewards,
-                                        #    add_colorbar=epoch == 0,
-                                           fit_pca=False,
-                                           name="Learned State Representation (Training Data)",
-                                           path=os.path.join(figdir_repr, "Epoch_{}.png".format(epoch+1)))
+                        if not self.use_split:
+                            plotRepresentation(state_pred, rewards,
+                                                fit_pca=False,
+                                                name="Learned State Representation (Training Data)",
+                                                path=os.path.join(figdir_repr, "Epoch_{}.png".format(epoch+1)))
+                        else:
+                            state_pred_split_list = np.split(state_pred, split_dim_list, axis=-1)
+                            plotRepresentation(state_pred_split_list[0], rewards,
+                                               fit_pca=False,
+                                               name="Learned State Representation (Training Data)",
+                                               path=os.path.join(figdir_repr, "Inv_ep_{}.png".format(epoch+1)))
+                            plotRepresentation(state_pred_split_list[2], rewards,
+                                               fit_pca=False,
+                                               name="Learned State Representation (Training Data)",
+                                               path=os.path.join(figdir_repr, "Rwd_ep_{}.png".format(epoch+1)))
                         printGTC(state_pred, ground_truth, target_positions)
                         if self.use_autoencoder or self.use_vae or self.use_dae or self.model_type=="unet": #  or self.model_type == 'gan'
                             # Plot Reconstructed Image
