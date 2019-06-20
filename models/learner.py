@@ -539,11 +539,13 @@ class SRL4robotics(BaseLearner):
                             # Removing negative reward
                             # rewards_st[rewards_st == -1] = 0
                             rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
-                            label_weights = torch.tensor([0.0, 1000.0]).to(self.device)
-                            self.module.add_reward_loss(states_split_list[state_index["reward"]],
-                                                        rewards_st, next_states_split_list[state_index["reward"]
-                                                                                           ], loss_manager,
-                                                        label_weights=label_weights, ignore_index=-1)
+                            label_weights = torch.tensor([0.0, 100.0]).to(self.device)
+                            distance_state = (states_split_list[0].detach() - states_split_list[state_index["reward"]])**2
+                            self.module.add_reward_loss(distance_state,
+                                                        rewards_st, next_states_split_list[state_index["reward"]], 
+                                                        loss_manager,
+                                                        label_weights=label_weights, 
+                                                        ignore_index=-1)
 
                     # if self.use_vae:
                     #     if self.perceptual_similarity_loss:

@@ -46,7 +46,7 @@ class BaseInverseModel(BaseModelSRL):
         :return: (torch.Tensor)
         """
         if model_type == "linear":
-            self.inverse_net = nn.Linear(state_dim * 2, action_dim)
+            self.inverse_net = nn.Linear(state_dim, action_dim)
         elif model_type == "mlp":
             self.inverse_net = nn.Sequential(nn.Linear(state_dim * 2, n_hidden),
                                              nn.ReLU(),
@@ -68,7 +68,7 @@ class BaseInverseModel(BaseModelSRL):
         :return: probability of each action
         """
         # input: concatenation of state & next state over the 2nd dimension
-        return self.inverse_net(torch.cat((state, next_state), dim=1))
+        return self.inverse_net(next_state-state)
 
 
 class BaseRewardModel(BaseModelSRL):
@@ -77,11 +77,7 @@ class BaseRewardModel(BaseModelSRL):
         super(BaseRewardModel, self).__init__()
 
     def initRewardNet(self, state_dim, n_rewards=2, n_hidden=16):
-        self.reward_net = nn.Sequential(nn.Linear(2 * state_dim, n_hidden),
-                                        nn.ReLU(),
-                                        nn.Linear(n_hidden, n_hidden),
-                                        nn.ReLU(),
-                                        nn.Linear(n_hidden, n_rewards))
+        self.reward_net = nn.Sequential(nn.Linear(state_dim, n_rewards))
 
     def forward(self, x):
         raise NotImplementedError()
@@ -93,7 +89,8 @@ class BaseRewardModel(BaseModelSRL):
         :param next_state: (torch.Tensor)
         :return: (torch.Tensor)
         """
-        return self.reward_net(torch.cat((state, next_state), dim=1))
+        # return self.reward_net(torch.cat((state, next_state), dim=1))
+        return self.reward_net(state)
 
 
 class BasicTrainer(BaseTrainer):
