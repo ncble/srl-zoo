@@ -529,9 +529,11 @@ class SRL4robotics(BaseLearner):
                                 prev_index = count_index
                                 count_index += 1
                         if self.use_forward_loss:
+                            name = "forward"
                             self.module.add_forward_loss(states_split_list[state_index["forward"]],
                                                          actions_st, next_states_split_list[state_index["forward"]], loss_manager)
                         if self.use_inverse_loss:
+                            name = "inverse"
                             self.module.add_inverse_loss(states_split_list[state_index["inverse"]],
                                                          actions_st, next_states_split_list[state_index["inverse"]], loss_manager)
                         if self.use_reward_loss:
@@ -539,35 +541,23 @@ class SRL4robotics(BaseLearner):
                             # Removing negative reward
                             # rewards_st[rewards_st == -1] = 0
                             rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
-                            label_weights = torch.tensor([0.0, 100.0]).to(self.device)
-                            distance_state = (states_split_list[0].detach() - states_split_list[state_index["reward"]])**2
+                            label_weights = torch.tensor([1.0, 100.0]).to(self.device)
+                            distance_state = (states_split_list[state_index[name]].detach() - states_split_list[state_index["reward"]])**2
+                            distance_state = torch.sum(distance_state, dim=-1, keepdim=True)
+                            # import ipdb; ipdb.set_trace()
                             self.module.add_reward_loss(distance_state,
-                                                        rewards_st, next_states_split_list[state_index["reward"]], 
+                                                        rewards_st, 
+                                                        next_states_split_list[state_index["reward"]], 
                                                         loss_manager,
                                                         label_weights=label_weights, 
                                                         ignore_index=-1)
+                            # self.module.add_reward_loss(states_split_list[state_index["reward"]],
+                            #                             rewards_st, 
+                            #                             next_states_split_list[state_index["reward"]], 
+                            #                             loss_manager,
+                            #                             label_weights=label_weights, 
+                            #                             ignore_index=-1)
 
-                    # if self.use_vae:
-                    #     if self.perceptual_similarity_loss:
-                    #         perceptualSimilarityLoss(states_denoiser, states_denoiser_predicted, next_states_denoiser,
-                    #                                 next_states_denoiser_predicted,
-                    #                                 weight=self.losses_weights_dict['perceptual'],
-                    #                                 loss_manager=loss_manager)
-                    #     else:
-                    #         generationLoss(reconstruct_obs, next_decoded_obs, obs, next_obs,
-                    #                     weight=self.losses_weights_dict['vae'], loss_manager=loss_manager)
-                    # if self.reward_prior:
-                    #     rewards_st = reward
-                    #     rewards_st = torch.from_numpy(rewards_st).float().view(-1, 1).to(self.device)
-                    #     rewardPriorLoss(states, rewards_st, weight=self.losses_weights_dict['reward-prior'],
-                    #                     loss_manager=loss_manager)
-                    # if self.episode_prior:
-                    #     episodePriorLoss(minibatch_idx, minibatch_episodes, states, self.prior_discriminator,
-                    #                     BALANCED_SAMPLING, weight=self.losses_weights_dict['episode-prior'],
-                    #                     loss_manager=loss_manager)
-                    # if self.use_triplets:
-                    #     tripletLoss(states, positive_states, negative_states, weight=self.losses_weights_dict['triplet'],
-                    #                 loss_manager=loss_manager, alpha=0.2)
                     if self.model_type == 'gan':
                         # GAN's training requires multi-optimizers.
                         if not valid_mode:
@@ -659,6 +649,33 @@ class SRL4robotics(BaseLearner):
                         # Compute weighted average of losses of encoder part (including 'forward'/'inverse'/'reward' models)
                         loss = self.module.model.train_on_batch(
                             obs, next_obs, self.optimizer, loss_manager, valid_mode=valid_mode, device=self.device)
+                        ## Accuracy
+                        if self.use_split:
+                            with torch.no_grad():
+                                
+                                if self.use_inverse_loss:
+                                    name = "inverse"
+                                    state_pred = states_split_list[state_index[name]]
+                                    next_state_pred = next_states_split_list[state_index[name]] 
+                                    act_pred = self.module.inverseModel(state_pred, next_state_pred)
+                                    act_pred = torch.argmax(act_pred, dim=-1)
+                                    inv_acc = torch.sum(actions_st.view(-1) == act_pred).float() / actions_st.numel()
+                                    inv_acc = inv_acc.item()
+                                elif self.use_forward_loss:
+                                    name = "forward"
+                                    state_pred = states_split_list[state_index[name]]
+                                    inv_acc = 0
+                                else:
+                                    inv_acc = 0
+                                state_pred = torch.sum((states_split_list[state_index["reward"]] - state_pred)**2, dim=-1, keepdim=True) # self.module.model(obs)
+                                # state_pred = states_split_list[state_index["reward"]] # self.module.model(obs)
+                                # next_state_pred = next_states_split_list[state_index["reward"]] # self.module.model(next_obs)
+                                rwd_pred = self.module.rewardModel(state_pred.detach(), state_pred.detach())
+                                rwd_pred = torch.argmax(rwd_pred, dim=-1)
+                                rwd_acc = torch.sum(rewards_st == rwd_pred).float() / rewards_st.numel()
+                                rwd_acc = rwd_acc.item()
+                            # import ipdb; ipdb.set_trace()
+                        
                         # Loss: accumulate scalar loss
                         epoch_loss += loss
                         epoch_batches += 1
@@ -673,8 +690,8 @@ class SRL4robotics(BaseLearner):
                         if monitor_mode == 'loss':
                             if iter_ind % ITER_FLAG == 0 or (iter_ind == n_batch_per_epoch-1):
                                 if not valid_mode:
-                                    print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} | (elapsed time: {:.2f}s)".format(
-                                        epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, time.time() - start_time), end="")
+                                    print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} rwd_acc: {:.2%} inv_acc: {:.2%} | (elapsed time: {:.2f}s)".format(
+                                        epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, rwd_acc, inv_acc, time.time() - start_time), end="")
                                 else:
                                     print("\r-------(valid): {:.2%}, val_loss: {} | (elapsed time: {:.2f}s)".format(
                                         (iter_ind+1)/n_batch_per_epoch, val_loss_str, time.time() - start_time), end="")

@@ -77,7 +77,7 @@ class BaseRewardModel(BaseModelSRL):
         super(BaseRewardModel, self).__init__()
 
     def initRewardNet(self, state_dim, n_rewards=2, n_hidden=16):
-        self.reward_net = nn.Sequential(nn.Linear(state_dim, n_rewards))
+        self.reward_net = nn.Sequential(nn.Linear(1, n_rewards))
 
     def forward(self, x):
         raise NotImplementedError()
