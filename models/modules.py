@@ -78,6 +78,11 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         elif "vae" in losses:
             self.model = VAETrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type)
+        elif losses is not None and "triplet" in losses:
+            # pretrained resnet18 with fixed weights
+            # TODO not tested yet
+            raise NotImplementedError
+            self.model = EmbeddingNet(state_dim)
         else:
             # for losses not depending on specific architecture (supervised, inverse, forward..)
             self.model = BasicTrainer(state_dim=state_dim, img_shape=self.img_shape)
@@ -94,10 +99,6 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         #     self.model = SRLConvolutionalNetwork(state_dim, cuda)
 
         # # elif: [Add new model here !]
-
-        # if losses is not None and "triplet" in losses:
-        #     # pretrained resnet18 with fixed weights
-        #     self.model = EmbeddingNet(state_dim)
 
     def forward(self, x):
         if self.model_type == 'linear' or self.model_type == 'mlp':
