@@ -21,7 +21,7 @@ from losses.losses import LossManager, autoEncoderLoss, roboticPriorsLoss, tripl
 from losses.utils import findPriorsPairs
 from pipeline import NAN_ERROR
 from plotting.representation_plot import plotRepresentation, plotImage, printGTC
-from preprocessing.data_loader import DataLoader, RobotEnvDataset
+from preprocessing.data_loader import RobotEnvDataset, StratifiedSampler, BalancedLabelSampler
 from preprocessing.utils import deNormalize
 from utils import printRed, detachToNumpy, printYellow
 from .modules import SRLModules
@@ -89,11 +89,32 @@ class BaseLearner(object):
         :return: (np.ndarray)
         """
         predictions = []
-        for obs_var in data_loader:
-            obs_var = obs_var.to(self.device)
-            predictions.append(self._predFn(obs_var))
+        for obs in data_loader:
+            obs = obs.to(self.device)
+            predictions.append(self._predFn(obs))
 
         return np.concatenate(predictions, axis=0)
+    def predRewardsWithDataLoader(self, data_loader):
+        """
+        Predict rewards using minibatches to avoid memory issues
+        :param data_loader: (DataLoader object)
+        :return: (np.ndarray)
+        """
+        predictions = []
+        gt_reward = []
+        split_dim_list = [198, 2] # TODO TODO TODO TODO TODO
+        for obs, obs_next, rwd in data_loader:
+            obs = obs.to(self.device)
+            obs_next = obs_next.to(self.device)
+            states = self.module.model(obs)
+            
+            states_next = self.module.model(obs_next)
+            states = torch.split(states, split_dim_list, dim=-1)[0] # TODO TODO TODO TODO TODO
+            states_next = torch.split(states_next, split_dim_list, dim=-1)[0] # TODO TODO TODO TODO TODO
+            predictions.append(self.module.rewardModel(states, states_next))
+            gt_reward.append(rwd)
+        
+        return np.argmax(detachToNumpy(torch.cat(predictions, dim=0)), axis=-1), detachToNumpy(torch.cat(gt_reward, dim=0))
 
     def learn(self, *args, **kwargs):
         """
@@ -325,9 +346,40 @@ class SRL4robotics(BaseLearner):
             os.makedirs(figdir_repr, exist_ok=True)
             os.makedirs(figdir_recon, exist_ok=True)
 
+        sample_indices = np.arange(len(images_path))
+        # class_labels = torch.tensor(list(map(lambda x:int(x.split("/")[-2].split("_")[-1]), images_path)))
+        # balanced_sampler = StratifiedSampler(class_labels, batch_size=self.batch_size)
+        # class_labels = np.ones(1000)
+        # class_labels[:900] = 0
+        # class_labels = torch.tensor(class_labels)
+        # sampler = StratifiedSampler(class_labels, batch_size=self.batch_size)
+        # import ipdb; ipdb.set_trace()
+        
+        # Shuffle datasets
+        sample_indices = sk_shuffle(sample_indices, random_state=0)
+        valid_size = np.round(VALIDATION_SIZE * len(images_path)).astype(np.int64)
+        indices_train, indices_val = sample_indices[:-valid_size], sample_indices[-valid_size:]
+        train_set = RobotEnvDataset(indices_train, images_path, actions, rewards, episode_starts,
+                                    mode=1, img_shape=self.img_shape, multi_view=self.multi_view,
+                                    use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
+                                    occlusion_percentage=self.occlusion_percentage, dtype=np.float32)
+        valid_set = RobotEnvDataset(indices_val, images_path, actions, rewards, episode_starts,
+                                    mode=1, img_shape=self.img_shape, multi_view=self.multi_view,
+                                    use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
+                                    occlusion_percentage=self.occlusion_percentage, dtype=np.float32)
+        test_set = RobotEnvDataset(np.arange(len(images_path)), images_path, actions, rewards, episode_starts,
+                                   mode=0, img_shape=self.img_shape, multi_view=self.multi_view,
+                                   use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
+                                   occlusion_percentage=self.occlusion_percentage, dtype=np.float32)
+        test_set2 = RobotEnvDataset(np.arange(len(images_path)), images_path, actions, rewards, episode_starts,
+                                   mode=2, img_shape=self.img_shape, multi_view=self.multi_view,
+                                   use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
+                                   occlusion_percentage=self.occlusion_percentage, dtype=np.float32)
+        
         data_loader_params = {'batch_size': self.batch_size,
                               'shuffle': True,
                               'num_workers': N_WORKERS,
+                            #   'sampler': balanced_sampler,
                               #   'drop_last': False,
                               'pin_memory': False
                               }
@@ -337,30 +389,11 @@ class SRL4robotics(BaseLearner):
                                    #   'drop_last': False,
                                    'pin_memory': False
                                    }
-        sample_indices = np.arange(len(images_path))
-        # Shuffle datasets
-        # sample_indices, images_path, actions, rewards, episode_starts = sk_shuffle(sample_indices, images_path, actions, rewards, episode_starts, random_state=0)
-        sample_indices = sk_shuffle(sample_indices, random_state=0)
-        valid_size = np.round(VALIDATION_SIZE * len(images_path)).astype(np.int64)
-
-        # indices_train, imgspath_train, act_train, rew_train, epis_train = sample_indices[:-valid_size], images_path[:-valid_size], actions[:-valid_size], rewards[:-valid_size], episode_starts[:-valid_size]
-        # indices_val, imgspath_val, act_val, rew_val, epis_val           = sample_indices[-valid_size:], images_path[-valid_size:], actions[-valid_size:], rewards[-valid_size:], episode_starts[-valid_size:]
-        indices_train, indices_val = sample_indices[:-valid_size], sample_indices[-valid_size:]
-        train_set = RobotEnvDataset(indices_train, images_path, actions, rewards, episode_starts,
-                                    is_training=True, img_shape=self.img_shape, multi_view=self.multi_view,
-                                    use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
-                                    occlusion_percentage=self.occlusion_percentage, dtype=np.float32)
-        valid_set = RobotEnvDataset(indices_val, images_path, actions, rewards, episode_starts,
-                                    is_training=True, img_shape=self.img_shape, multi_view=self.multi_view,
-                                    use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
-                                    occlusion_percentage=self.occlusion_percentage, dtype=np.float32)
-        test_set = RobotEnvDataset(np.arange(len(images_path)), images_path, actions, rewards, episode_starts,
-                                   is_training=False, img_shape=self.img_shape, multi_view=self.multi_view,
-                                   use_triplets=self.use_triplets, apply_occlusion=self.use_dae,
-                                   occlusion_percentage=self.occlusion_percentage, dtype=np.float32)
+        
         dataloader_train = torch.utils.data.DataLoader(train_set, **data_loader_params)
         dataloader_valid = torch.utils.data.DataLoader(valid_set, **data_loader_params)
         dataloader_test = torch.utils.data.DataLoader(test_set, **data_loader_params_test)
+        dataloader_test2 = torch.utils.data.DataLoader(test_set2, **data_loader_params_test)
         # ------- Load ground truth states/ target positions (for plots and GTC) -------
 
         # ========================= Print some info =========================
@@ -413,6 +446,8 @@ class SRL4robotics(BaseLearner):
             label_valid = torch.ones((self.batch_size, 1)).to(self.device)
             label_fake = torch.zeros((self.batch_size, 1)).to(self.device)
         best_error = np.inf
+        best_acc = -np.inf
+        best_f1 = -np.inf
         best_model_path = "{}/srl_model.pth".format(self.log_folder)
 
         # Random features, we don't need to train a model
@@ -432,6 +467,7 @@ class SRL4robotics(BaseLearner):
                     epoch_loss_G, epoch_batches_G = 0, 0
                     d_acc, g_acc = 0, 0
                 epoch_loss, epoch_batches = 0, 0
+                ep_rwd_acc, ep_inv_acc, ep_cls_acc = 0, 0, 0
                 n_batch_per_epoch = len(dataloader)
 
                 start_time = time.time()
@@ -445,12 +481,10 @@ class SRL4robotics(BaseLearner):
                     self.module.train()
                 dataloader = infinite_dataloader(dataloader)  # iter(dataloader)
                 for iter_ind in range(n_batch_per_epoch):
-                    (sample_idx, obs, next_obs, action, reward, noisy_obs, next_noisy_obs) = next(dataloader)
+                    (sample_idx, obs, next_obs, action, reward, cls_gt) = next(dataloader)
                     obs, next_obs = obs.to(self.device), next_obs.to(self.device)
-
-                    # if self.use_dae:
-                    #     noisy_obs = noisy_obs.to(self.device)
-                    #     next_noisy_obs = next_noisy_obs.to(self.device)
+                    cls_gt = cls_gt.to(self.device)
+                    # import ipdb; ipdb.set_trace()
 
                     if self.model_type != "gan":
                         # It's extremely important to release loss tensor, otherwise it will cause 'memory leak".
@@ -511,7 +545,7 @@ class SRL4robotics(BaseLearner):
                             # Removing negative reward
                             # rewards_st[rewards_st == -1] = 0
                             rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
-                            label_weights = torch.tensor([0.0, 1000.0]).to(self.device)
+                            label_weights = torch.tensor([1.0, 100.0]).to(self.device)
                             self.module.add_reward_loss(states, rewards_st, next_states, loss_manager,
                                                         label_weights=label_weights, ignore_index=-1)
                     else:  # TODO UGLY
@@ -542,21 +576,16 @@ class SRL4robotics(BaseLearner):
                             # rewards_st[rewards_st == -1] = 0
                             rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
                             label_weights = torch.tensor([1.0, 100.0]).to(self.device)
-                            distance_state = (states_split_list[state_index[name]].detach() - states_split_list[state_index["reward"]])**2
-                            distance_state = torch.sum(distance_state, dim=-1, keepdim=True)
-                            # import ipdb; ipdb.set_trace()
-                            self.module.add_reward_loss(distance_state,
+                            
+                            self.module.add_reward_loss(states_split_list[state_index["reward"]],
                                                         rewards_st, 
                                                         next_states_split_list[state_index["reward"]], 
                                                         loss_manager,
                                                         label_weights=label_weights, 
                                                         ignore_index=-1)
-                            # self.module.add_reward_loss(states_split_list[state_index["reward"]],
-                            #                             rewards_st, 
-                            #                             next_states_split_list[state_index["reward"]], 
-                            #                             loss_manager,
-                            #                             label_weights=label_weights, 
-                            #                             ignore_index=-1)
+                            self.module.add_spcls_loss(states_split_list[state_index["reward"]],
+                                                        cls_gt,
+                                                        loss_manager)
 
                     if self.model_type == 'gan':
                         # GAN's training requires multi-optimizers.
@@ -652,7 +681,6 @@ class SRL4robotics(BaseLearner):
                         ## Accuracy
                         if self.use_split:
                             with torch.no_grad():
-                                
                                 if self.use_inverse_loss:
                                     name = "inverse"
                                     state_pred = states_split_list[state_index[name]]
@@ -667,17 +695,23 @@ class SRL4robotics(BaseLearner):
                                     inv_acc = 0
                                 else:
                                     inv_acc = 0
-                                state_pred = torch.sum((states_split_list[state_index["reward"]] - state_pred)**2, dim=-1, keepdim=True) # self.module.model(obs)
-                                # state_pred = states_split_list[state_index["reward"]] # self.module.model(obs)
-                                # next_state_pred = next_states_split_list[state_index["reward"]] # self.module.model(next_obs)
-                                rwd_pred = self.module.rewardModel(state_pred.detach(), state_pred.detach())
+                                state_pred = states_split_list[state_index["reward"]] # self.module.model(obs)
+                                next_state_pred = next_states_split_list[state_index["reward"]] # self.module.model(next_obs)
+                                rwd_pred = self.module.rewardModel(state_pred.detach(), next_state_pred.detach())
                                 rwd_pred = torch.argmax(rwd_pred, dim=-1)
                                 rwd_acc = torch.sum(rewards_st == rwd_pred).float() / rewards_st.numel()
                                 rwd_acc = rwd_acc.item()
-                            # import ipdb; ipdb.set_trace()
+
+                                cls_pred = self.module.classifier(state_pred.detach())
+                                cls_pred = torch.argmax(cls_pred, dim=-1)
+                                cls_acc = torch.sum(cls_pred == cls_gt).float() / cls_gt.numel()
+                                cls_acc = cls_acc.item()
                         
                         # Loss: accumulate scalar loss
                         epoch_loss += loss
+                        ep_rwd_acc += rwd_acc
+                        ep_inv_acc += inv_acc
+                        ep_cls_acc += cls_acc
                         epoch_batches += 1
                         if not valid_mode:
                             # mean training loss so far
@@ -685,16 +719,23 @@ class SRL4robotics(BaseLearner):
                         else:
                             # mean validation loss so far
                             val_loss = epoch_loss / float(epoch_batches)
-                            val_loss_str = "{:.4f}*".format(
+                            val_rwd_acc = ep_rwd_acc / float(epoch_batches)
+                            val_inv_acc = ep_inv_acc / float(epoch_batches)
+                            val_cls_acc = ep_cls_acc / float(epoch_batches)
+                            val_acc = (val_rwd_acc + val_inv_acc + val_cls_acc) / 3.
+                            val_loss_str = "{:.4f}**".format(
                                 val_loss) if val_loss < best_error else "{:.4f}".format(val_loss)
+                            val_acc_str = "{:.4f}**".format(
+                                val_acc) if val_acc > best_acc else "{:.4f}".format(val_acc)
+
                         if monitor_mode == 'loss':
                             if iter_ind % ITER_FLAG == 0 or (iter_ind == n_batch_per_epoch-1):
                                 if not valid_mode:
-                                    print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} rwd_acc: {:.2%} inv_acc: {:.2%} | (elapsed time: {:.2f}s)".format(
-                                        epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, rwd_acc, inv_acc, time.time() - start_time), end="")
+                                    print("\rEpoch {:3}/{}, {:.2%}, train_loss: {:.4f} rwd_acc: {:.2%} inv_acc: {:.2%} cls_acc: {:.2%}| (elapsed time: {:.2f}s)".format(
+                                        epoch + 1, N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, train_loss, rwd_acc, inv_acc, cls_acc, time.time() - start_time), end="")
                                 else:
-                                    print("\r-------(valid): {:.2%}, val_loss: {} | (elapsed time: {:.2f}s)".format(
-                                        (iter_ind+1)/n_batch_per_epoch, val_loss_str, time.time() - start_time), end="")
+                                    print("\r-------(valid): {:.2%}, val_loss: {} val_acc: {} | (elapsed time: {:.2f}s)".format(
+                                        (iter_ind+1)/n_batch_per_epoch, val_loss_str, val_acc_str, time.time() - start_time), end="")
                         elif monitor_mode == 'pbar':
                             pbar.update(1)
                 if valid_mode:
@@ -726,9 +767,12 @@ class SRL4robotics(BaseLearner):
                 loss_history_D = update_loss_history(loss_manager_D, train_loss_D, 0, epoch_batches_D, epoch)
                 loss_history_G = update_loss_history(loss_manager_G, train_loss_G, 0, epoch_batches_G, epoch)
             # Save best model
-            if val_loss < best_error:
+            if val_loss < best_error: ## TODO TODO TODO
                 best_error = val_loss
-                torch.save(self.module.state_dict(), best_model_path)
+            if val_acc > best_acc: ## TODO TODO TODO
+                best_acc = val_acc
+                # torch.save(self.module.state_dict(), best_model_path)
+            
 
             if np.isnan(train_loss):
                 printRed("NaN Loss, consider increasing NOISE_STD in the gaussian noise layer")
@@ -741,6 +785,14 @@ class SRL4robotics(BaseLearner):
                         # Optionally plot the current state space
                         print("Predicting states for all the observations...")
                         state_pred = self.predStatesWithDataLoader(dataloader_test)
+                        reward_pred, reward_gt = self.predRewardsWithDataLoader(dataloader_test2)
+                        
+                        f1_a = np.sum(((reward_gt-reward_pred) == 0) * (reward_pred == 1))
+                        f1_b = np.sum(((reward_pred-reward_gt) == 1) * (reward_pred == 1))
+                        f1_c = np.sum(((reward_pred-reward_gt) != 0) * (reward_gt == 1))
+                        f1_score = 2*f1_a/(2*f1_a+f1_b+f1_c)
+                        recall = f1_a / (f1_a + f1_c)
+                        
                         plotRepresentation(state_pred, rewards,
                                            #    add_colorbar=epoch == 0,
                                            fit_pca=False,
@@ -755,33 +807,13 @@ class SRL4robotics(BaseLearner):
                                 images = make_grid([obs[0], reconstruct_obs[0], obs[1], reconstruct_obs[1]], nrow=2)
                                 plotImage(deNormalize(detachToNumpy(images)), mode='cv2',
                                           save2dir=figdir_recon, index=epoch+1)
-                                # if self.use_dae:
-                                #     raise NotImplementedError
-                                #     plotImage(deNormalize(detachToNumpy(noisy_obs[0])), "Noisy Input Image (Train)")
-                                if self.perceptual_similarity_loss:
-                                    raise NotImplementedError
-                                    plotImage(deNormalize(detachToNumpy(decoded_obs_denoiser[0])),
-                                              "Reconstructed Image DAE")
-                                    plotImage(deNormalize(detachToNumpy(decoded_obs_denoiser_predicted[0])),
-                                              "Reconstructed Image predicted DAE")
-
-                            elif obs[0].shape[0] % 3 == 0:  # Multi-RGB
-                                raise NotImplementedError
-                                for k in range(obs[0].shape[0] // 3):
-                                    plotImage(deNormalize(detachToNumpy(obs[0][k * 3:(k + 1) * 3, :, :])),
-                                              "Input Image {} (Train)".format(k + 1))
-                                    # if self.use_dae:
-                                    #     plotImage(deNormalize(detachToNumpy(noisy_obs[0][k * 3:(k + 1) * 3, :, :])),
-                                    #               "Noisy Input Image (Train)".format(k + 1))
-                                    if self.perceptual_similarity_loss:
-                                        plotImage(deNormalize(
-                                            detachToNumpy(decoded_obs_denoiser[0][k * 3:(k + 1) * 3, :, :])),
-                                            "Reconstructed Image DAE")
-                                        plotImage(deNormalize(
-                                            detachToNumpy(decoded_obs_denoiser_predicted[0][k * 3:(k + 1) * 3, :, :])),
-                                            "Reconstructed Image predicted DAE")
-                                    plotImage(deNormalize(detachToNumpy(reconstruct_obs[0][k * 3:(k + 1) * 3, :, :])),
-                                              "Reconstructed Image {}".format(k + 1))
+                    if f1_score > best_f1:
+                        best_f1 = f1_score
+                        torch.save(self.module.state_dict(), best_model_path)
+                        f1_score_str = "{:.4f}***".format(f1_score)
+                    else:
+                        f1_score_str = "{:.4f}".format(f1_score)
+                    print("F1 score: {}; Recall: {:.4f}".format(f1_score_str, recall))
 
         # Load best model before predicting states
         self.module.load_state_dict(torch.load(best_model_path))

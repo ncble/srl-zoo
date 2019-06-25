@@ -1,6 +1,6 @@
 from .autoencoders import AutoEncoderTrainer
 from .vae import VAETrainer  # CNNVAE, DenseVAE
-from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel, BasicTrainer
+from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel, BasicTrainer, SelfSupClassfier
 from .priors import SRLConvolutionalNetwork, SRLDenseNetwork, SRLLinear
 from .triplet import EmbeddingNet
 from .gan import GANTrainer  # Generator, Discriminator, Encoder, UNet,
@@ -8,17 +8,17 @@ import torch
 from collections import OrderedDict
 try:
     # relative import: when executing as a package: python -m ...
-    from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
+    from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss, spclsLoss
     from .base_trainer import BaseTrainer
     from ..utils import printRed
 except:
     # absolute import: when executing directly: python train.py ...
-    from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss
+    from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss, spclsLoss
     from models.base_trainer import BaseTrainer
     from utils import printRed
 
 
-class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
+class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, SelfSupClassfier):
     def __init__(self, state_dim=2, img_shape=None, action_dim=6, model_type="custom_cnn", losses=None,
                  split_dimensions=None, n_hidden_reward=16, inverse_model_type="linear"):
         """
@@ -37,6 +37,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         BaseForwardModel.__init__(self)
         BaseInverseModel.__init__(self)
         BaseRewardModel.__init__(self)
+        SelfSupClassfier.__init__(self)
         self.state_dim = state_dim
         if img_shape is None:
             self.img_shape = (3, 224, 224)
@@ -70,6 +71,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         self.initForwardNet(state_dim_dict.get("forward", self.state_dim), action_dim)
         self.initInverseNet(state_dim_dict.get("inverse", self.state_dim), action_dim, model_type=inverse_model_type)
         self.initRewardNet(state_dim_dict.get("reward", self.state_dim), n_hidden=n_hidden_reward)
+        self.initSpClsmodel(state_dim_dict.get("reward", self.state_dim), n_hidden=100)
 
         # Architecture
         if "autoencoder" in losses or "dae" in losses:
@@ -131,3 +133,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         rewards_pred = self.rewardModel(states, next_states)
         rewardModelLoss(rewards_pred, rewards_st, weight=100.0, loss_manager=loss_manager,
                         label_weights=label_weights, ignore_index=ignore_index)
+    
+    def add_spcls_loss(self, states, cls_gt, loss_manager):
+        cls_pred = self.classifier(states)
+        spclsLoss(cls_pred, cls_gt, weight=100.0, loss_manager=loss_manager)
