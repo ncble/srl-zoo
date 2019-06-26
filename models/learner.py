@@ -94,7 +94,7 @@ class BaseLearner(object):
             predictions.append(self._predFn(obs))
 
         return np.concatenate(predictions, axis=0)
-    def predRewardsWithDataLoader(self, data_loader):
+    def predRewardsWithDataLoader(self, data_loader, split_dim_list=[2, 2]):
         """
         Predict rewards using minibatches to avoid memory issues
         :param data_loader: (DataLoader object)
@@ -102,7 +102,7 @@ class BaseLearner(object):
         """
         predictions = []
         gt_reward = []
-        split_dim_list = [198, 2] # TODO TODO TODO TODO TODO
+        # split_dim_list = [2, 2] # TODO TODO TODO TODO TODO
         for obs, obs_next, rwd in data_loader:
             obs = obs.to(self.device)
             obs_next = obs_next.to(self.device)
@@ -772,7 +772,7 @@ class SRL4robotics(BaseLearner):
             if val_acc > best_acc: ## TODO TODO TODO
                 best_acc = val_acc
                 # torch.save(self.module.state_dict(), best_model_path)
-            
+            torch.save(self.module.state_dict(), best_model_path) # save weight at each epoch ! # TODO TODO TODO TODO
 
             if np.isnan(train_loss):
                 printRed("NaN Loss, consider increasing NOISE_STD in the gaussian noise layer")
@@ -785,7 +785,7 @@ class SRL4robotics(BaseLearner):
                         # Optionally plot the current state space
                         print("Predicting states for all the observations...")
                         state_pred = self.predStatesWithDataLoader(dataloader_test)
-                        reward_pred, reward_gt = self.predRewardsWithDataLoader(dataloader_test2)
+                        reward_pred, reward_gt = self.predRewardsWithDataLoader(dataloader_test2, split_dim_list=split_dim_list)
                         
                         f1_a = np.sum(((reward_gt-reward_pred) == 0) * (reward_pred == 1))
                         f1_b = np.sum(((reward_pred-reward_gt) == 1) * (reward_pred == 1))
@@ -809,7 +809,7 @@ class SRL4robotics(BaseLearner):
                                           save2dir=figdir_recon, index=epoch+1)
                     if f1_score > best_f1:
                         best_f1 = f1_score
-                        torch.save(self.module.state_dict(), best_model_path)
+                        # torch.save(self.module.state_dict(), best_model_path) # TODO TODO TODO TODO
                         f1_score_str = "{:.4f}***".format(f1_score)
                     else:
                         f1_score_str = "{:.4f}".format(f1_score)
