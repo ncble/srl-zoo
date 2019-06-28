@@ -78,6 +78,7 @@ class BaseModelAutoEncoder(BaseModelSRL):
             nn.ReLU(True),
 
             nn.ConvTranspose2d(64, self.img_shape[0], kernel_size=4, stride=2),  # 224x224xN_CHANNELS
+            nn.Tanh()
         )
 
     def getStates(self, observations):

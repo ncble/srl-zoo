@@ -136,4 +136,5 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, SelfSupCla
     
     def add_spcls_loss(self, states, cls_gt, loss_manager):
         cls_pred = self.classifier(states)
-        spclsLoss(cls_pred, cls_gt, weight=10.0, loss_manager=loss_manager)
+        spclsLoss(cls_pred, cls_gt, weight=100.0, loss_manager=loss_manager)
+        # import ipdb; ipdb.set_trace()
