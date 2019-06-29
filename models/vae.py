@@ -36,6 +36,7 @@ class DenseVAE(BaseModelVAE):
             nn.Linear(50, 50),
             nn.ReLU(),
             nn.Linear(50, np.prod(self.img_shape)),
+            nn.Tanh()
         )
 
         self.relu = nn.ReLU()

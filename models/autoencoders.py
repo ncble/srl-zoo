@@ -33,6 +33,7 @@ class LinearAutoEncoder(BaseModelAutoEncoder):
 
         self.decoder = nn.Sequential(
             nn.Linear(state_dim, np.prod(self.img_shape)),
+            nn.Tanh()
         )
 
     def encode(self, x):
@@ -80,6 +81,7 @@ class DenseAutoEncoder(BaseModelAutoEncoder):
             nn.Linear(50, 50),
             nn.Tanh(),
             nn.Linear(50, np.prod(self.img_shape)),
+            nn.Tanh()
         )
 
     def encode(self, x):

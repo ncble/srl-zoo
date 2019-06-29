@@ -695,7 +695,7 @@ class SRL4robotics(BaseLearner):
                                     act_pred = torch.argmax(act_pred, dim=-1)
                                     inv_acc = torch.sum(actions_st.view(-1) == act_pred).float() / actions_st.numel()
                                     inv_acc = inv_acc.item()
-                                elif self.use_forward_loss:
+                                elif self.use_forward_loss: # forward loss without inverse loss
                                     name = "forward"
                                     state_pred = states_split_list[state_index[name]]
                                     inv_acc = 0
