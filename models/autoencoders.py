@@ -24,7 +24,6 @@ class LinearAutoEncoder(BaseModelAutoEncoder):
 
     def __init__(self, state_dim, img_shape):
         super(LinearAutoEncoder, self).__init__(state_dim, img_shape)
-        # BaseModelAutoEncoder.__init__(self)
         self.img_shape = img_shape
 
         self.encoder = nn.Sequential(
@@ -64,7 +63,6 @@ class DenseAutoEncoder(BaseModelAutoEncoder):
 
     def __init__(self, state_dim, img_shape):
         super(DenseAutoEncoder, self).__init__(state_dim, img_shape)
-        # BaseModelAutoEncoder.__init__(self)
         self.img_shape = img_shape
         self.encoder = nn.Sequential(
             nn.Linear(np.prod(self.img_shape), 50),
@@ -231,7 +229,6 @@ class UNetGenerator(nn.Module):
             self.first = nn.Linear(
                 self.state_dim, np.prod(self.img_shape), bias=True)
 
-            # state_layer = Dense(np.prod(self.img_shape), activation=None)(state_input)
         self.activations = nn.ModuleDict([
             ['lrelu', nn.LeakyReLU(negative_slope=0.2)],
             ['prelu', nn.PReLU()],
@@ -268,9 +265,7 @@ class UNetAutoEncoder(BaseModelAutoEncoder):
     """
 
     def __init__(self, state_dim=3, img_shape=(3, 224, 224)):
-        # state_dim=state_dim, img_shape=img_shape
         super(UNetAutoEncoder, self).__init__(state_dim=state_dim, img_shape=img_shape)
-        # BaseModelAutoEncoder.__init__(self)
         self.decoder = UNetGenerator(img_shape, state_dim, unet_bn=True)
         self.encoder = UNetEncoder(img_shape, state_dim, unet_bn=True)
 
@@ -300,16 +295,10 @@ class AutoEncoderTrainer(BaseTrainer):
         assert model_type in ['custom_cnn', 'linear', 'mlp', 'unet']
         if model_type == 'custom_cnn':
             self.model = CNNAutoEncoder(self.state_dim, self.img_shape)
-            # CNNAutoEncoder.__init__(self, self.state_dim, self.img_shape)
-            # super(CNNAutoEncoder, self).__init__(
-            #     state_dim=self.state_dim, img_shape=self.img_shape)
-            # super().CNNAutoEncoder(state_dim=self.state_dim, img_shape=self.img_shape)
         elif model_type == 'mlp':
             self.model = DenseAutoEncoder(self.state_dim, self.img_shape)
-            # DenseAutoEncoder.__init__(self, self.state_dim, np.prod(self.img_shape))
         elif model_type == 'linear':
             self.model = LinearAutoEncoder(self.state_dim, self.img_shape)
-            # LinearAutoEncoder.__init__(self, self.state_dim, np.prod(self.img_shape))
         elif model_type == 'unet':
             self.model = UNetAutoEncoder(self.state_dim, self.img_shape)
         else:
