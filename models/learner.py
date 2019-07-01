@@ -257,9 +257,9 @@ class SRL4robotics(BaseLearner):
         self.log_folder = log_folder
 
         # Default weights that are updated with the weights passed to the script
-        self.losses_weights_dict = {"forward": 1.0, "inverse": 2.0, "reward": 1.0, "priors": 1.0,
+        self.losses_weights_dict = {"forward": 1.0, "inverse": 2.0, "reward": 100.0, "spcls": 100.0,
                                     "episode-prior": 1.0, "reward-prior": 10, "triplet": 1.0,
-                                    "autoencoder": 1.0, "vae": 0.5e-6, "perceptual": 1e-6, "dae": 1.0,
+                                    "autoencoder": 1.0, "vae": 0.5e-6, "dae": 1.0,
                                     'l1_reg': l1_reg, "l2_reg": l2_reg, 'random': 1.0}
         self.occlusion_percentage = occlusion_percentage
         self.state_dim_dae = state_dim_dae
@@ -508,15 +508,19 @@ class SRL4robotics(BaseLearner):
 
                     if not self.use_split:
                         if self.use_forward_loss:
-                            self.module.add_forward_loss(states, actions_st, next_states, loss_manager)
+                            self.module.add_forward_loss(states, actions_st, next_states,
+                                                         loss_manager, weight=self.losses_weights_dict['forward'])
                         if self.use_inverse_loss:
-                            self.module.add_inverse_loss(states, actions_st, next_states, loss_manager)
+                            self.module.add_inverse_loss(states, actions_st, next_states,
+                                                         loss_manager, weight=self.losses_weights_dict['inverse'])
                         if self.use_reward_loss:
                             rewards_st = np.array(reward).copy()
-                            rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
+                            rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) ## TODO
                             label_weights = torch.tensor([1.0, 100.0]).to(self.device)
+                            assert 1==2
                             self.module.add_reward_loss(states, rewards_st, next_states, loss_manager,
-                                                        label_weights=label_weights, ignore_index=-1)
+                                                        label_weights=label_weights, ignore_index=-1, ## TODO
+                                                        weight=self.losses_weights_dict['reward'])
                     else:  # TODO UGLY
                         split_dim_list = [a for a in list(self.split_dimensions.values()) if a != -1]
                         states_split_list = torch.split(states, split_dim_list, dim=-1)
@@ -534,11 +538,13 @@ class SRL4robotics(BaseLearner):
                         if self.use_forward_loss:
                             name = "forward"
                             self.module.add_forward_loss(states_split_list[state_index["forward"]],
-                                                         actions_st, next_states_split_list[state_index["forward"]], loss_manager)
+                                                         actions_st, next_states_split_list[state_index["forward"]], loss_manager, 
+                                                         weight=self.losses_weights_dict['forward'])
                         if self.use_inverse_loss:
                             name = "inverse"
                             self.module.add_inverse_loss(states_split_list[state_index["inverse"]],
-                                                         actions_st, next_states_split_list[state_index["inverse"]], loss_manager)
+                                                         actions_st, next_states_split_list[state_index["inverse"]], loss_manager, 
+                                                         weight=self.losses_weights_dict['inverse'])
                         if self.use_reward_loss:
                             rewards_st = np.array(reward).copy()
                             rewards_st = 1-rewards_st
@@ -551,10 +557,12 @@ class SRL4robotics(BaseLearner):
                                                         distance_state,
                                                         loss_manager,
                                                         label_weights=label_weights, 
-                                                        ignore_index=2)
+                                                        ignore_index=2,
+                                                        weight=self.losses_weights_dict['reward'])
                             self.module.add_spcls_loss(states_split_list[state_index["reward"]],
                                                         cls_gt,
-                                                        loss_manager)
+                                                        loss_manager,
+                                                       weight=self.losses_weights_dict['spcls'])
 
                     if self.model_type == 'gan':
                         # GAN's training requires multi-optimizers.
