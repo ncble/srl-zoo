@@ -120,15 +120,15 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel):
         """
         return self.model(anchor), self.model(positive), self.model(negative)
 
-    def add_forward_loss(self, states, actions_st, next_states, loss_manager):
+    def add_forward_loss(self, states, actions_st, next_states, loss_manager, weight=1.0):
         next_states_pred = self.forwardModel(states, actions_st)
-        forwardModelLoss(next_states_pred, next_states, weight=1.0, loss_manager=loss_manager)
+        forwardModelLoss(next_states_pred, next_states, weight=weight, loss_manager=loss_manager)
 
-    def add_inverse_loss(self, states, actions_st, next_states, loss_manager):
+    def add_inverse_loss(self, states, actions_st, next_states, loss_manager, weight=2.0):
         actions_pred = self.inverseModel(states, next_states)
-        inverseModelLoss(actions_pred, actions_st, weight=2.0, loss_manager=loss_manager)
+        inverseModelLoss(actions_pred, actions_st, weight=weight, loss_manager=loss_manager)
 
-    def add_reward_loss(self, states, rewards_st, next_states, loss_manager, label_weights, ignore_index=-1):
+    def add_reward_loss(self, states, rewards_st, next_states, loss_manager, label_weights, ignore_index=-1, weight=100.0):
         rewards_pred = self.rewardModel(states, next_states)
-        rewardModelLoss(rewards_pred, rewards_st, weight=100.0, loss_manager=loss_manager,
+        rewardModelLoss(rewards_pred, rewards_st, weight=weight, loss_manager=loss_manager,
                         label_weights=label_weights, ignore_index=ignore_index)

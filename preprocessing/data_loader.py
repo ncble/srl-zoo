@@ -380,8 +380,8 @@ class SupervisedDataLoader(DataLoader):
 
 
 class RobotEnvDataset(torch.utils.data.Dataset):
-    """Characterizes a dataset for PyTorch"""
-    """
+    r"""Robot Envinronment Dataset for DataLoader (Pytorch natively supported)
+
     A Custom dataloader to work with our datasets, and to prepare data for the different models
     (inverse, priors, autoencoder, ...)
 
@@ -394,7 +394,7 @@ class RobotEnvDataset(torch.utils.data.Dataset):
     :param max_queue_len: (int) Max number of minibatches that can be preprocessed at the same time
     :param apply_occlusion: is the use of occlusion enabled - when using DAE (bool)
     :param occlusion_percentage: max percentage of occlusion when using DAE (float)
-    :param is_training: (bool)
+    :param mode: (int)
     :param img_shape: (tuple or None) if None, image will not be resize, else: resize image to new shape (channels first)) e.g. img_shape = (3, 128, 128).
 
         Set to True, the dataloader will output both `obs` and `next_obs` (a tuple of th.Tensor)
@@ -403,7 +403,7 @@ class RobotEnvDataset(torch.utils.data.Dataset):
 
     def __init__(self, sample_indices, images_path, actions, rewards, episode_starts,
                  img_shape=None,
-                 is_training=True,
+                 mode=1,
                  multi_view=False,
                  use_triplets=False,
                  apply_occlusion=False,
@@ -419,7 +419,7 @@ class RobotEnvDataset(torch.utils.data.Dataset):
         self.episode_starts = episode_starts
 
         self.img_shape = img_shape
-        self.is_training = is_training
+        self.mode = mode
         self.use_triplets = use_triplets
         self.multi_view = multi_view
         # apply occlusion for training a DAE
@@ -428,6 +428,10 @@ class RobotEnvDataset(torch.utils.data.Dataset):
 
         self.dtype = dtype
         self.img_extension = img_extension
+        
+        self.class_labels = np.array(list(map(lambda x:int(x.split("/")[-2].split("_")[-1]), images_path)))
+        # self.random_target_balance = random_target_balance
+        
     def __len__(self):
         ## 'Denotes the total number of samples'
         return len(self.sample_indices)
@@ -456,15 +460,23 @@ class RobotEnvDataset(torch.utils.data.Dataset):
         image_path = self.images_path[index]
         # Load data and get label
         if not self.multi_view:
-            if self.is_training:
+            if self.mode == 1:
                 img = self._get_one_img(image_path)
                 img_next = self._get_one_img(self.images_path[index+1])
                 action = self.actions[index]
                 reward = self.rewards[index]
-                return index, img.astype(self.dtype), img_next.astype(self.dtype), action, reward, 1, 1
-            else:
+                cls_gt = self.class_labels[index]
+                return index, img.astype(self.dtype), img_next.astype(self.dtype), action, reward, cls_gt
+            elif self.mode == 0:
                 img = self._get_one_img(image_path)
                 return img.astype(self.dtype)
+            elif self.mode == 2:
+                img = self._get_one_img(image_path)
+                img_next = self._get_one_img(self.images_path[index+1])
+                reward = self.rewards[index]
+                return img.astype(self.dtype), img_next.astype(self.dtype), reward
+            else:
+                return
 
         else:  # [TODO: not tested yet]
             raise NotImplementedError

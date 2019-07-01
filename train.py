@@ -60,7 +60,7 @@ if __name__ == '__main__':
     parser.add_argument('--balanced-sampling', action='store_true', default=False,
                         help='Force balanced sampling for episode independent prior instead of uniform')
     parser.add_argument('--losses', nargs='+', default=[], **parseLossArguments(
-        choices=["forward", "inverse", "reward", "priors", "episode-prior", "reward-prior", "triplet",
+        choices=["forward", "inverse", "reward", "spcls", "priors", "episode-prior", "reward-prior", "triplet",
                  "autoencoder", "vae", "perceptual", "dae", "random"],
         help='The wanted losses. One may also want to specify a weight and dimension '
              'that apply as follows: "<name>:<weight>:<dimension>".'))
@@ -81,6 +81,8 @@ if __name__ == '__main__':
                         help="Number of CPUs to use for dataloader.")
     parser.add_argument('--srl-pre-weights', type=str, default=None,
                         help="Load SRL pretrained weights.")
+    parser.add_argument('--debug', action='store_true', default=False,
+                        help="Debug mode.")                        
     args = parser.parse_args()
     # args.cuda = not args.no_cuda and th.cuda.is_available()
     args.data_folder = parseDataFolder(args.data_folder)
@@ -199,7 +201,7 @@ if __name__ == '__main__':
                        l1_reg=args.l1_reg, l2_reg=args.l2_reg, cuda=args.gpu_num, multi_view=args.multi_view,
                        losses=losses, losses_weights_dict=losses_weights_dict, n_actions=n_actions, beta=args.beta,
                        split_dimensions=split_dimensions, path_to_dae=args.path_to_dae,
-                       state_dim_dae=args.state_dim_dae, occlusion_percentage=args.occlusion_percentage, pretrained_weights_path=args.srl_pre_weights)
+                       state_dim_dae=args.state_dim_dae, occlusion_percentage=args.occlusion_percentage, pretrained_weights_path=args.srl_pre_weights, debug=args.debug)
 
     if args.training_set_size > 0:
         limit = args.training_set_size
@@ -207,14 +209,16 @@ if __name__ == '__main__':
         images_path = images_path[:limit]
         rewards = rewards[:limit]
         episode_starts = episode_starts[:limit]
-
+        truncate = limit
+    else:
+        truncate = None 
     # Save configs in log folder
     saveConfig(exp_config, print_config=True)
     if args.figdir is not None:
         os.makedirs(args.figdir, exist_ok=True)
     loss_history, learned_states, pairs_name_weights = srl.learn(
         images_path, actions, rewards, episode_starts, figdir=args.figdir, monitor_mode=args.monitor,
-        ground_truth=ground_truth, relative_positions=relative_positions, target_positions=target_positions)
+        ground_truth=ground_truth, relative_positions=relative_positions, target_positions=target_positions, truncate=truncate)
 
     # Update config with weights for each losses
     exp_config['losses_weights'] = pairs_name_weights
