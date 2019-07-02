@@ -702,6 +702,7 @@ class SRL4robotics(BaseLearner):
                         if self.use_split:
                             with torch.no_grad():
                                 if self.use_inverse_loss:
+                                    # HACK it's not a good way using 'if' like this.
                                     name = "inverse"
                                     state_pred = states_split_list[state_index[name]]
                                     next_state_pred = next_states_split_list[state_index[name]] 
@@ -709,7 +710,8 @@ class SRL4robotics(BaseLearner):
                                     act_pred = torch.argmax(act_pred, dim=-1)
                                     inv_acc = torch.sum(actions_st.view(-1) == act_pred).float() / actions_st.numel()
                                     inv_acc = inv_acc.item()
-                                elif self.use_forward_loss: # forward loss without inverse loss
+                                elif self.use_forward_loss: # only forward loss without inverse loss
+                                    # HACK it's not a good way using 'if' like this.
                                     name = "forward"
                                     state_pred = states_split_list[state_index[name]]
                                     inv_acc = 0
@@ -727,7 +729,16 @@ class SRL4robotics(BaseLearner):
                                 cls_pred = torch.argmax(cls_pred, dim=-1)
                                 cls_acc = torch.sum(cls_pred == cls_gt).float() / cls_gt.numel()
                                 cls_acc = cls_acc.item()
-                        
+                        else:
+                            assert not self.use_reward_loss ## Not supported yet! HACK TODO
+                            rwd_acc = 0.0
+                            cls_acc = 0.0
+                            if self.use_inverse_loss:
+                                act_pred = self.module.inverseModel(states, next_states)
+                                act_pred = torch.argmax(act_pred, dim=-1)
+                                inv_acc = torch.sum(actions_st.view(-1) == act_pred).float() / actions_st.numel()
+                                inv_acc = inv_acc.item()
+                                                    
                         # Loss: accumulate scalar loss
                         epoch_loss += loss
                         ep_rwd_acc += rwd_acc
@@ -790,10 +801,16 @@ class SRL4robotics(BaseLearner):
             # Save best model
             if val_loss < best_error: ## TODO TODO TODO
                 best_error = val_loss
+                if not self.use_split:
+                    torch.save(self.module.state_dict(), best_model_path) # save weight at each epoch !      
             if val_acc > best_acc: ## TODO TODO TODO
                 best_acc = val_acc
+                if not self.use_split:
+                    torch.save(self.module.state_dict(), best_model_path) # save weight at each epoch !
                 # torch.save(self.module.state_dict(), best_model_path)
-            torch.save(self.module.state_dict(), best_model_path) # save weight at each epoch ! # TODO TODO TODO TODO
+            
+            if self.use_split:
+                torch.save(self.module.state_dict(), best_model_path) # save weight at each epoch ! # TODO TODO TODO TODO
 
             if np.isnan(train_loss):
                 printRed("NaN Loss, consider increasing NOISE_STD in the gaussian noise layer")
@@ -806,14 +823,15 @@ class SRL4robotics(BaseLearner):
                         # Optionally plot the current state space
                         print("Predicting states for all the observations...")
                         state_pred = self.predStatesWithDataLoader(dataloader_test)
-                        reward_pred, reward_gt = self.predRewardsWithDataLoader(dataloader_test2, split_dim_list=split_dim_list)
-                        reward_gt = 1-reward_gt
-                        # import ipdb; ipdb.set_trace()
-                        f1_a = np.sum(((reward_gt-reward_pred) == 0) * (reward_pred == 0))
-                        f1_b = np.sum(((reward_pred-reward_gt) == -1) * (reward_pred == 0))
-                        f1_c = np.sum(((reward_pred-reward_gt) != 0) * (reward_gt == 0))
-                        f1_score = 2*f1_a/(2*f1_a+f1_b+f1_c)
-                        recall = f1_a / (f1_a + f1_c)
+                        if self.use_reward_loss and self.use_split:
+                            reward_pred, reward_gt = self.predRewardsWithDataLoader(dataloader_test2, split_dim_list=split_dim_list)
+                            reward_gt = 1-reward_gt
+                            # import ipdb; ipdb.set_trace()
+                            f1_a = np.sum(((reward_gt-reward_pred) == 0) * (reward_pred == 0))
+                            f1_b = np.sum(((reward_pred-reward_gt) == -1) * (reward_pred == 0))
+                            f1_c = np.sum(((reward_pred-reward_gt) != 0) * (reward_gt == 0))
+                            f1_score = 2*f1_a/(2*f1_a+f1_b+f1_c)
+                            recall = f1_a / (f1_a + f1_c)
                         
                         plotRepresentation(state_pred, rewards,
                                            #    add_colorbar=epoch == 0,
@@ -829,13 +847,14 @@ class SRL4robotics(BaseLearner):
                                 images = make_grid([obs[0], reconstruct_obs[0], obs[1], reconstruct_obs[1]], nrow=2)
                                 plotImage(deNormalize(detachToNumpy(images)), mode='cv2',
                                           save2dir=figdir_recon, index=epoch+1)
-                    if f1_score > best_f1:
-                        best_f1 = f1_score
-                        # torch.save(self.module.state_dict(), best_model_path) # TODO TODO TODO TODO
-                        f1_score_str = "{:.4f}***".format(f1_score)
-                    else:
-                        f1_score_str = "{:.4f}".format(f1_score)
-                    print("F1 score: {}; Recall: {:.4f}".format(f1_score_str, recall))
+                    if self.use_reward_loss and self.use_split:
+                        if f1_score > best_f1:
+                            best_f1 = f1_score
+                            # torch.save(self.module.state_dict(), best_model_path) # TODO TODO TODO TODO
+                            f1_score_str = "{:.4f}***".format(f1_score)
+                        else:
+                            f1_score_str = "{:.4f}".format(f1_score)
+                        print("F1 score: {}; Recall: {:.4f}".format(f1_score_str, recall))
 
         # Load best model before predicting states
         self.module.load_state_dict(torch.load(best_model_path))
