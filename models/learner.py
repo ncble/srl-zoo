@@ -234,7 +234,7 @@ class SRL4robotics(BaseLearner):
         # Default weights that are updated with the weights passed to the script
         self.losses_weights_dict = {"forward": 1.0, "inverse": 2.0, "reward": 1.0, "priors": 1.0,
                                     "episode-prior": 1.0, "reward-prior": 10, "triplet": 1.0,
-                                    "autoencoder": 1.0, "vae": 0.5e-6, "perceptual": 1e-6, "dae": 1.0,
+                                    "autoencoder": 1.0, "vae": 1.0, "perceptual": 1e-6, "dae": 1.0,
                                     'l1_reg': l1_reg, "l2_reg": l2_reg, 'random': 1.0}
         self.occlusion_percentage = occlusion_percentage
         self.state_dim_dae = state_dim_dae
