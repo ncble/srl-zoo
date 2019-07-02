@@ -738,6 +738,8 @@ class SRL4robotics(BaseLearner):
                                 act_pred = torch.argmax(act_pred, dim=-1)
                                 inv_acc = torch.sum(actions_st.view(-1) == act_pred).float() / actions_st.numel()
                                 inv_acc = inv_acc.item()
+                            else:
+                                inv_acc = 0.0
                                                     
                         # Loss: accumulate scalar loss
                         epoch_loss += loss
