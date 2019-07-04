@@ -77,7 +77,7 @@ class BaseRewardModel(BaseModelSRL):
         super(BaseRewardModel, self).__init__()
 
     def initRewardNet(self, state_dim, n_rewards=2, n_hidden=16):
-        self.reward_net = nn.Sequential(nn.Linear(state_dim, n_hidden),
+        self.reward_net = nn.Sequential(nn.Linear(2*state_dim, n_hidden),
                                         nn.LeakyReLU(negative_slope=0.1),
                                         nn.Linear(n_hidden, n_hidden),
                                         nn.LeakyReLU(negative_slope=0.1),
@@ -96,42 +96,31 @@ class BaseRewardModel(BaseModelSRL):
         # return self.reward_net(state)
         return self.reward_net(next_state)
 
+
 class BaseRewardModel2(BaseModelSRL):
     def __init__(self):
         self.reward_net = None
         super(BaseRewardModel2, self).__init__()
 
-    def initRewardNet2(self, state_dim, action_dim, n_rewards=2, n_hidden=128, model_type="linear"):
-        """
-        :param state_dim: (torch.Tensor)
-        :param action_dim: (int)
-        :param n_hidden: (int)
-        :param model_type: (str)
-        :return: (torch.Tensor)
-        """
-        self.action_dim = action_dim
-        if model_type == "linear":
-            # self.reward_net = nn.Linear(state_dim+action_dim, n_rewards)
-            self.reward_net = nn.Sequential(nn.Linear(state_dim+action_dim, n_hidden),
+    def initRewardNet2(self, state_dim, n_rewards=2, n_hidden=16):
+        self.reward_net = nn.Sequential(nn.Linear(state_dim, n_hidden),
                                         nn.LeakyReLU(negative_slope=0.1),
                                         nn.Linear(n_hidden, n_hidden),
                                         nn.LeakyReLU(negative_slope=0.1),
                                         nn.Linear(n_hidden, n_rewards))
-        else:
-            raise ValueError("Unknown model_type for inverse model: {}".format(model_type))
-
     def forward(self, x):
         raise NotImplementedError()
 
-    def rewardModel2(self, state, action):
+    def rewardModel2(self, state):
         """
-        Predict reward given current state and action
+        Predict reward given current state and next state
         :param state: (torch.Tensor)
-        :param action: (torch.Tensor)
         :return: (torch.Tensor)
         """
-        concat = torch.cat((state, encodeOneHot(action, self.action_dim)), dim=1)
-        return self.reward_net(concat)
+        return self.reward_net(state)
+        # another idea
+        # concat = torch.cat((state, encodeOneHot(action, self.action_dim)), dim=1)
+        # return self.reward_net(concat)
 
 class SelfSupClassfier(BaseModelSRL):
     def __init__(self, num_classes=100):

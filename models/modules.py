@@ -1,6 +1,6 @@
 from .autoencoders import AutoEncoderTrainer
 from .vae import VAETrainer  # CNNVAE, DenseVAE
-from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel, BasicTrainer, SelfSupClassfier
+from .forward_inverse import BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseRewardModel2, BasicTrainer, SelfSupClassfier
 from .priors import SRLConvolutionalNetwork, SRLDenseNetwork, SRLLinear
 from .triplet import EmbeddingNet
 from .gan import GANTrainer  # Generator, Discriminator, Encoder, UNet,
@@ -18,7 +18,7 @@ except:
     from utils import printRed
 
 
-class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, SelfSupClassfier):
+class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseRewardModel2, SelfSupClassfier):
     def __init__(self, state_dim=2, img_shape=None, action_dim=6, model_type="custom_cnn", losses=None,
                  split_dimensions=None, n_hidden_reward=16, inverse_model_type="linear"):
         """
@@ -37,6 +37,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, SelfSupCla
         BaseForwardModel.__init__(self)
         BaseInverseModel.__init__(self)
         BaseRewardModel.__init__(self)
+        BaseRewardModel2.__init__(self)
         SelfSupClassfier.__init__(self)
         self.state_dim = state_dim
         if img_shape is None:
@@ -71,7 +72,8 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, SelfSupCla
         self.initForwardNet(state_dim_dict.get("forward", self.state_dim), action_dim)
         self.initInverseNet(state_dim_dict.get("inverse", self.state_dim), action_dim, model_type=inverse_model_type)
         self.initRewardNet(state_dim_dict.get("reward", self.state_dim), n_hidden=n_hidden_reward)
-        self.initSpClsmodel(state_dim_dict.get("reward", self.state_dim), n_hidden=100)
+        self.initRewardNet2(state_dim_dict.get("reward2", self.state_dim), n_hidden=n_hidden_reward)
+        self.initSpClsmodel(state_dim_dict.get("reward2", self.state_dim), n_hidden=100)
 
         # Architecture
         if "autoencoder" in losses or "dae" in losses:
@@ -80,17 +82,13 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, SelfSupCla
         elif "vae" in losses:
             self.model = VAETrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type)
+        elif 'gan' in losses:
+            self.model = GANTrainer(img_shape=self.img_shape, state_dim=state_dim)
+            self.model.build_model(model_type=model_type)
         else:
             # for losses not depending on specific architecture (supervised, inverse, forward..)
             self.model = BasicTrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type)  # TODO add the other model_type !!
-
-        if model_type == 'gan':  # [TODO: gan should be a loss type (not model_type) in the future]
-            self.model = GANTrainer(img_shape=self.img_shape, state_dim=state_dim)
-            self.model.build_model()
-        elif model_type == 'unet':  # HACK [TODO: only for DEBUG]
-            self.model = AutoEncoderTrainer(state_dim=state_dim, img_shape=self.img_shape)
-            self.model.build_model(model_type='unet')
 
         # elif model_type == "resnet":
         #     self.model = SRLConvolutionalNetwork(state_dim, cuda)
@@ -133,8 +131,12 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, SelfSupCla
         rewards_pred = self.rewardModel(states, next_states)
         rewardModelLoss(rewards_pred, rewards_st, weight=weight, loss_manager=loss_manager,
                         label_weights=label_weights, ignore_index=ignore_index)
+    def add_reward2_loss(self, states, rewards_st, loss_manager, label_weights, ignore_index=-1, weight=100.0):
+        rewards_pred = self.rewardModel2(states)
+        # import ipdb; ipdb.set_trace()
+        rewardModelLoss(rewards_pred, rewards_st, weight=weight, loss_manager=loss_manager,
+                        label_weights=label_weights, ignore_index=ignore_index)
     
     def add_spcls_loss(self, states, cls_gt, loss_manager, weight=100.0):
         cls_pred = self.classifier(states)
         spclsLoss(cls_pred, cls_gt, weight=weight, loss_manager=loss_manager)
-        # import ipdb; ipdb.set_trace()

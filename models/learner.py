@@ -201,6 +201,7 @@ class SRL4robotics(BaseLearner):
             self.use_forward_loss = "forward" in losses
             self.use_inverse_loss = "inverse" in losses
             self.use_reward_loss = "reward" in losses
+            self.use_reward2_loss = "reward2" in losses
             self.no_priors = "priors" not in losses
             self.episode_prior = "episode-prior" in losses
             self.reward_prior = "reward-prior" in losses
@@ -209,6 +210,7 @@ class SRL4robotics(BaseLearner):
             self.use_triplets = "triplet" in self.losses
             self.perceptual_similarity_loss = "perceptual" in self.losses
             self.use_dae = "dae" in self.losses
+            self.use_gan = "gan" in self.losses
             self.path_to_dae = path_to_dae
 
             if isinstance(split_dimensions, OrderedDict) and sum(split_dimensions.values()) > 0:
@@ -232,7 +234,7 @@ class SRL4robotics(BaseLearner):
 
         self.module = self.module.to(self.device)
 
-        if self.model_type != 'gan':
+        if not self.use_gan:
             learnable_params = [param for param in self.module.parameters() if param.requires_grad]
             # learnable_params = list(self.module.parameters()) ## NEW [TODO]
 
@@ -257,7 +259,7 @@ class SRL4robotics(BaseLearner):
         self.log_folder = log_folder
 
         # Default weights that are updated with the weights passed to the script
-        self.losses_weights_dict = {"forward": 1.0, "inverse": 2.0, "reward": 100.0, "spcls": 100.0,
+        self.losses_weights_dict = {"forward": 1.0, "inverse": 2.0, "reward": 100.0, "reward2": 100.0, "spcls": 100.0,
                                     "episode-prior": 1.0, "reward-prior": 10, "triplet": 1.0,
                                     "autoencoder": 1.0, "vae": 0.5e-6, "dae": 1.0,
                                     'l1_reg': l1_reg, "l2_reg": l2_reg, 'random': 1.0}
@@ -351,13 +353,6 @@ class SRL4robotics(BaseLearner):
             os.makedirs(figdir_recon, exist_ok=True)
 
         sample_indices = np.arange(len(images_path))
-        # class_labels = torch.tensor(list(map(lambda x:int(x.split("/")[-2].split("_")[-1]), images_path)))
-        # balanced_sampler = StratifiedSampler(class_labels, batch_size=self.batch_size)
-        # class_labels = np.ones(1000)
-        # class_labels[:900] = 0
-        # class_labels = torch.tensor(class_labels)
-        # sampler = StratifiedSampler(class_labels, batch_size=self.batch_size)
-        # import ipdb; ipdb.set_trace()
         
         # Shuffle datasets
         sample_indices = sk_shuffle(sample_indices, random_state=0)
@@ -421,27 +416,11 @@ class SRL4robotics(BaseLearner):
             print("Loading pretrained model weights from path: {}...".format(self.pretrained_weights_path))
             self.module.load_state_dict(torch.load(self.pretrained_weights_path))
 
-        # dissimilar_pairs, same_actions_pairs = None, None
-        # if not self.no_priors:
-        #     dissimilar_pairs, same_actions_pairs = findPriorsPairs(self.batch_size, minibatchlist, actions, rewards,
-        #                                                            n_actions, n_pairs_per_action)
-        # if self.use_vae and self.perceptual_similarity_loss and self.path_to_dae is not None:
-        #     self.denoiser = SRLModules(state_dim=self.state_dim_dae, img_shape=self.img_shape, action_dim=self.dim_action,
-        #                                model_type="custom_cnn",
-        #                                losses=["dae"])
-        #     self.denoiser.load_state_dict(torch.load(self.path_to_dae))
-        #     self.denoiser.eval()
-        #     self.denoiser = self.denoiser.to(self.device)
-        #     for param in self.denoiser.parameters():
-        #         param.requires_grad = False
-        # if self.episode_prior:
-        #     idx_to_episode = {idx: episode_idx for idx, episode_idx in enumerate(np.cumsum(episode_starts))}
-        #     minibatch_episodes = [[idx_to_episode[i] for i in minibatch] for minibatch in minibatchlist]
-
         # TRAINING -----------------------------------------------------------------------------------------------------
         loss_history = defaultdict(list)
         loss_manager = LossManager(self.module, loss_history)
-        if self.model_type == 'gan':
+
+        if self.use_gan:
             loss_history_D = defaultdict(list)
             loss_history_G = defaultdict(list)
             loss_manager_D = LossManager(self.module.model.discriminator, loss_history_D)
@@ -465,7 +444,8 @@ class SRL4robotics(BaseLearner):
             for valid_mode, dataloader in enumerate([dataloader_train, dataloader_valid]):
                 if monitor_mode == 'pbar':
                     pbar = tqdm(total=len(dataloader))
-                if self.model_type == 'gan':
+
+                if self.use_gan:
                     # GAN's training requires multi-optimizers, thus multiple loss_manager/epoch_loss/val_loss, etc.
                     epoch_loss_D, epoch_batches_D = 0, 0
                     epoch_loss_G, epoch_batches_G = 0, 0
@@ -489,7 +469,7 @@ class SRL4robotics(BaseLearner):
                     obs, next_obs = obs.to(self.device), next_obs.to(self.device)
                     cls_gt = cls_gt.to(self.device)
 
-                    if self.model_type != "gan":
+                    if not self.use_gan:
                         # It's extremely important to release loss tensor, otherwise it will cause 'memory leak".
                         self.optimizer.zero_grad()
                         loss_manager.resetLosses()
@@ -502,7 +482,7 @@ class SRL4robotics(BaseLearner):
                                self.losses_weights_dict['l2_reg'], loss_manager)
 
                     # Actions associated to the observations
-                    if self.use_forward_loss or self.use_inverse_loss or self.use_reward_loss:
+                    if self.use_forward_loss or self.use_inverse_loss or self.use_reward_loss or self.use_reward2_loss:
                         states, next_states = self.module(obs), self.module(next_obs)
                         actions_st = action.view(-1, 1).to(self.device)
 
@@ -545,26 +525,34 @@ class SRL4robotics(BaseLearner):
                             self.module.add_inverse_loss(states_split_list[state_index["inverse"]],
                                                          actions_st, next_states_split_list[state_index["inverse"]], loss_manager, 
                                                          weight=self.losses_weights_dict['inverse'])
-                        if self.use_reward_loss:
+                        if self.use_reward2_loss:
                             rewards_st = np.array(reward).copy()
                             rewards_st = 1-rewards_st
                             rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
                             label_weights = torch.tensor([100.0, 1.0]).to(self.device)
-                            distance_state = (next_states_split_list[state_index["reward"]
+                            distance_state = (next_states_split_list[state_index["reward2"]
                                                                     ] - next_states_split_list[state_index["inverse"]])**2
-                            self.module.add_reward_loss(states_split_list[state_index["reward"]],
+                            # self.module.add_reward_loss(states_split_list[state_index["reward"]],
+                            #                             rewards_st, 
+                            #                             distance_state,
+                            #                             loss_manager,
+                            #                             label_weights=label_weights, 
+                            #                             ignore_index=2,
+                            #                             weight=self.losses_weights_dict['reward'])
+                            self.module.add_reward2_loss(distance_state,
                                                         rewards_st, 
-                                                        distance_state,
                                                         loss_manager,
                                                         label_weights=label_weights, 
                                                         ignore_index=2,
-                                                        weight=self.losses_weights_dict['reward'])
-                            self.module.add_spcls_loss(states_split_list[state_index["reward"]],
+                                                        weight=self.losses_weights_dict['reward2'])
+                            self.module.add_spcls_loss(states_split_list[state_index["reward2"]],
                                                         cls_gt,
                                                         loss_manager,
                                                        weight=self.losses_weights_dict['spcls'])
+                        if self.use_reward_loss:
+                            raise NotImplementedError
 
-                    if self.model_type == 'gan':
+                    if self.use_gan:
                         # GAN's training requires multi-optimizers.
                         if not valid_mode:
                             # === Train the Discriminator ===
@@ -655,9 +643,9 @@ class SRL4robotics(BaseLearner):
                                     inv_acc = 0
                                 else:
                                     inv_acc = 0
-                                state_pred = states_split_list[state_index["reward"]] # self.module.model(obs)
+                                state_pred = states_split_list[state_index["reward2"]] # self.module.model(obs)
                                 # next_state_pred = next_states_split_list[state_index["reward"]] # self.module.model(next_obs)
-                                distance_state = (next_states_split_list[state_index["reward"]
+                                distance_state = (next_states_split_list[state_index["reward2"]
                                                                          ] - next_states_split_list[state_index["inverse"]])**2
                                 rwd_pred = self.module.rewardModel(state_pred.detach(), distance_state.detach())
                                 rwd_pred = torch.argmax(rwd_pred, dim=-1)
@@ -668,7 +656,17 @@ class SRL4robotics(BaseLearner):
                                 cls_pred = torch.argmax(cls_pred, dim=-1)
                                 cls_acc = torch.sum(cls_pred == cls_gt).float() / cls_gt.numel()
                                 cls_acc = cls_acc.item()
-                        
+                        else:
+                            assert not self.use_reward_loss ## Not supported yet! HACK TODO
+                            rwd_acc = 0.0
+                            cls_acc = 0.0
+                            if self.use_inverse_loss:
+                                act_pred = self.module.inverseModel(states, next_states)
+                                act_pred = torch.argmax(act_pred, dim=-1)
+                                inv_acc = torch.sum(actions_st.view(-1) == act_pred).float() / actions_st.numel()
+                                inv_acc = inv_acc.item()
+                            else:
+                                inv_acc = 0.0
                         ep_rwd_acc += rwd_acc
                         ep_inv_acc += inv_acc
                         ep_cls_acc += cls_acc
@@ -717,9 +715,9 @@ class SRL4robotics(BaseLearner):
                                     inv_acc = 0
                                 else:
                                     inv_acc = 0
-                                state_pred = states_split_list[state_index["reward"]] # self.module.model(obs)
+                                state_pred = states_split_list[state_index["reward2"]] # self.module.model(obs)
                                 # self.module.model(next_obs)
-                                distance_state = (next_states_split_list[state_index["reward"]] - next_state_pred)**2
+                                distance_state = (next_states_split_list[state_index["reward2"]] - next_state_pred)**2
                                 rwd_pred = self.module.rewardModel(state_pred.detach(), distance_state.detach())
                                 rwd_pred = torch.argmax(rwd_pred, dim=-1)
                                 rwd_acc = torch.sum(rewards_st == rwd_pred).float() / rewards_st.numel()
@@ -797,7 +795,7 @@ class SRL4robotics(BaseLearner):
                         loss_history[key].append(0)
                 return loss_history
             loss_history = update_loss_history(loss_manager, train_loss, val_loss, epoch_batches, epoch)
-            if self.model_type == 'gan' and not valid_mode:
+            if self.use_gan and not valid_mode:
                 loss_history_D = update_loss_history(loss_manager_D, train_loss_D, 0, epoch_batches_D, epoch)
                 loss_history_G = update_loss_history(loss_manager_G, train_loss_G, 0, epoch_batches_G, epoch)
             # Save best model
@@ -825,7 +823,7 @@ class SRL4robotics(BaseLearner):
                         # Optionally plot the current state space
                         print("Predicting states for all the observations...")
                         state_pred = self.predStatesWithDataLoader(dataloader_test)
-                        if self.use_reward_loss and self.use_split:
+                        if self.use_reward2_loss and self.use_split:
                             reward_pred, reward_gt = self.predRewardsWithDataLoader(dataloader_test2, split_dim_list=split_dim_list)
                             reward_gt = 1-reward_gt
                             # import ipdb; ipdb.set_trace()
@@ -834,14 +832,15 @@ class SRL4robotics(BaseLearner):
                             f1_c = np.sum(((reward_pred-reward_gt) != 0) * (reward_gt == 0))
                             f1_score = 2*f1_a/(2*f1_a+f1_b+f1_c)
                             recall = f1_a / (f1_a + f1_c)
-                        
+                        elif self.use_reward_loss:
+                            raise NotImplementedError
                         plotRepresentation(state_pred, rewards,
                                            #    add_colorbar=epoch == 0,
                                            fit_pca=False,
                                            name="Learned State Representation (Training Data)",
                                            path=os.path.join(figdir_repr, "Epoch_{}.png".format(epoch+1)))
                         printGTC(state_pred, ground_truth, target_positions, truncate=truncate)
-                        if self.use_autoencoder or self.use_vae or self.use_dae or self.model_type == "unet":  # or self.model_type == 'gan'
+                        if self.use_autoencoder or self.use_vae or self.use_dae or self.use_gan:
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB
                                 reconstruct_obs = self.module.model.reconstruct(obs)
@@ -849,7 +848,7 @@ class SRL4robotics(BaseLearner):
                                 images = make_grid([obs[0], reconstruct_obs[0], obs[1], reconstruct_obs[1]], nrow=2)
                                 plotImage(deNormalize(detachToNumpy(images)), mode='cv2',
                                           save2dir=figdir_recon, index=epoch+1)
-                    if self.use_reward_loss and self.use_split:
+                    if self.use_reward2_loss and self.use_split:
                         if f1_score > best_f1:
                             best_f1 = f1_score
                             # torch.save(self.module.state_dict(), best_model_path) # TODO TODO TODO TODO
@@ -867,7 +866,7 @@ class SRL4robotics(BaseLearner):
         with torch.no_grad():
             pred_states = self.predStatesWithDataLoader(dataloader_test)
         pairs_loss_weight = [k for k in zip(loss_manager.names, loss_manager.weights)]
-        if self.model_type == 'gan':
+        if self.use_gan:
             pairs_loss_weight += [k for k in zip(loss_manager_D.names, loss_manager_D.weights)]
             pairs_loss_weight += [k for k in zip(loss_manager_G.names, loss_manager_G.weights)]
             # [Warning: the following line requires python >= 3.5]

@@ -60,8 +60,8 @@ if __name__ == '__main__':
     parser.add_argument('--balanced-sampling', action='store_true', default=False,
                         help='Force balanced sampling for episode independent prior instead of uniform')
     parser.add_argument('--losses', nargs='+', default=[], **parseLossArguments(
-        choices=["forward", "inverse", "reward", "spcls", "priors", "episode-prior", "reward-prior", "triplet",
-                 "autoencoder", "vae", "perceptual", "dae", "random"],
+        choices=["forward", "inverse", "reward", "reward2", "spcls", "priors", "episode-prior", "reward-prior", "triplet",
+                 "autoencoder", "vae", "perceptual", "dae", "random", "gan"],
         help='The wanted losses. One may also want to specify a weight and dimension '
              'that apply as follows: "<name>:<weight>:<dimension>".'))
     parser.add_argument('--beta', type=float, default=1.0,

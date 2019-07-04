@@ -13,7 +13,7 @@ except:
     from losses.losses import ganNonSaturateLoss, autoEncoderLoss, ganBCEaccuracy, AEboundLoss
 
 
-class Generator(nn.Module):
+class GeneratorUnet(nn.Module):
     def __init__(self, state_dim, img_shape,
                  unet_depth=2,  # 3
                  unet_ch=16,  # 32
@@ -148,10 +148,10 @@ class Discriminator(nn.Module):
         return x
 
 
-class Encoder(BaseModelSRL):
+class EncoderUnet(BaseModelSRL):
     """
 
-    Note: Only Encoder has getStates method.
+    Note: Only EncoderUnet has getStates method.
     """
 
     def __init__(self, state_dim, img_shape,
@@ -225,10 +225,13 @@ class GANTrainer(BaseTrainer):
         self.img_shape = img_shape
         self.state_dim = state_dim
 
-    def build_model(self):
-        self.encoder = Encoder(self.state_dim, self.img_shape, spectral_norm=False)
-        self.generator = Generator(self.state_dim, self.img_shape, spectral_norm=True)
-        self.discriminator = Discriminator(self.state_dim, self.img_shape, spectral_norm=True)
+    def build_model(self, model_type='unet'):
+        if model_type == "unet":
+            self.encoder = EncoderUnet(self.state_dim, self.img_shape, spectral_norm=False)
+            self.generator = GeneratorUnet(self.state_dim, self.img_shape, spectral_norm=True)
+            self.discriminator = Discriminator(self.state_dim, self.img_shape, spectral_norm=True)
+        else:
+            raise NotImplementedError
 
     def forward(self, x):
         return self.encoder(x)
@@ -291,11 +294,11 @@ if __name__ == "__main__":
     # a = 128
     # summary(model, (chs, a, a))
 
-    # model = Generator(10, img_shape=(3, 128, 128))
+    # model = GeneratorUnet(10, img_shape=(3, 128, 128))
     # summary(model, (10,))
 
     # model = Discriminator(4, (3, 128, 128))
     # summary(model, (3, 128, 128))
 
-    model = Encoder(4, (3, 128, 128))
+    model = EncoderUnet(4, (3, 128, 128))
     summary(model, (3, 128, 128))
