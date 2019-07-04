@@ -21,7 +21,7 @@ from losses.losses import LossManager, autoEncoderLoss, roboticPriorsLoss, tripl
 from losses.utils import findPriorsPairs
 from pipeline import NAN_ERROR
 from plotting.representation_plot import plotRepresentation, plotImage, printGTC
-from preprocessing.data_loader import RobotEnvDataset, StratifiedSampler, BalancedLabelSampler
+from preprocessing.data_loader import RobotEnvDataset
 from preprocessing.utils import deNormalize
 from utils import printRed, detachToNumpy, printYellow
 from .modules import SRLModules
@@ -351,14 +351,6 @@ class SRL4robotics(BaseLearner):
             os.makedirs(figdir_recon, exist_ok=True)
 
         sample_indices = np.arange(len(images_path))
-        # class_labels = torch.tensor(list(map(lambda x:int(x.split("/")[-2].split("_")[-1]), images_path)))
-        # balanced_sampler = StratifiedSampler(class_labels, batch_size=self.batch_size)
-        # class_labels = np.ones(1000)
-        # class_labels[:900] = 0
-        # class_labels = torch.tensor(class_labels)
-        # sampler = StratifiedSampler(class_labels, batch_size=self.batch_size)
-        # import ipdb; ipdb.set_trace()
-        
         # Shuffle datasets
         sample_indices = sk_shuffle(sample_indices, random_state=0)
         valid_size = np.round(VALIDATION_SIZE * len(images_path)).astype(np.int64)
