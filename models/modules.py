@@ -67,7 +67,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
                     state_dim_dict[loss_name] = dim
                     prev_dim = dim
         else:
-            state_dim_dict = {"forward": self.state_dim, "inverse": self.state_dim, "reward": self.state_dim}
+            state_dim_dict = {"forward": self.state_dim, "inverse": self.state_dim, "reward": self.state_dim, "reward2": self.state_dim}
 
         self.initForwardNet(state_dim_dict.get("forward", self.state_dim), action_dim)
         self.initInverseNet(state_dim_dict.get("inverse", self.state_dim), action_dim, model_type=inverse_model_type)
@@ -128,6 +128,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
         inverseModelLoss(actions_pred, actions_st, weight=weight, loss_manager=loss_manager)
 
     def add_reward_loss(self, states, rewards_st, next_states, loss_manager, label_weights, ignore_index=-1, weight=100.0):
+        # import ipdb; ipdb.set_trace()
         rewards_pred = self.rewardModel(states, next_states)
         rewardModelLoss(rewards_pred, rewards_st, weight=weight, loss_manager=loss_manager,
                         label_weights=label_weights, ignore_index=ignore_index)

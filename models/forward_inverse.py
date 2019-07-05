@@ -99,11 +99,11 @@ class BaseRewardModel(BaseModelSRL):
 
 class BaseRewardModel2(BaseModelSRL):
     def __init__(self):
-        self.reward_net = None
+        self.reward_net2 = None
         super(BaseRewardModel2, self).__init__()
 
     def initRewardNet2(self, state_dim, n_rewards=2, n_hidden=16):
-        self.reward_net = nn.Sequential(nn.Linear(state_dim, n_hidden),
+        self.reward_net2 = nn.Sequential(nn.Linear(state_dim, n_hidden),
                                         nn.LeakyReLU(negative_slope=0.1),
                                         nn.Linear(n_hidden, n_hidden),
                                         nn.LeakyReLU(negative_slope=0.1),
@@ -117,7 +117,7 @@ class BaseRewardModel2(BaseModelSRL):
         :param state: (torch.Tensor)
         :return: (torch.Tensor)
         """
-        return self.reward_net(state)
+        return self.reward_net2(state)
         # another idea
         # concat = torch.cat((state, encodeOneHot(action, self.action_dim)), dim=1)
         # return self.reward_net(concat)
