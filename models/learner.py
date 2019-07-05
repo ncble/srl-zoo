@@ -95,7 +95,7 @@ class BaseLearner(object):
 
         return np.concatenate(predictions, axis=0)
     def predRewardsWithDataLoader(self, data_loader, split_dim_list=[2, 2]):
-        """
+        """ (only split SRL model)
         Predict rewards using minibatches to avoid memory issues
         :param data_loader: (DataLoader object)
         :return: (np.ndarray)
@@ -113,11 +113,28 @@ class BaseLearner(object):
             splited_state = torch.split(states_next, split_dim_list, dim=-1)
             # states_next = splited_state[0]  # TODO TODO TODO TODO TODO
             distance_state = (splited_state[0] - splited_state[1])**2
-            predictions.append(self.module.rewardModel(states, distance_state))
+            predictions.append(self.module.rewardModel2(distance_state))
             gt_reward.append(rwd)
         
         return np.argmax(detachToNumpy(torch.cat(predictions, dim=0)), axis=-1), detachToNumpy(torch.cat(gt_reward, dim=0))
 
+    def predRewardsWithDataLoader0(self, data_loader):
+        """ (no split SRL model)
+        Predict rewards using minibatches to avoid memory issues
+        :param data_loader: (DataLoader object)
+        :return: (np.ndarray)
+        """
+        predictions = []
+        gt_reward = []
+
+        for obs, obs_next, rwd in data_loader:
+            obs = obs.to(self.device)
+            obs_next = obs_next.to(self.device)
+            states = self.module.model(obs)
+            states_next = self.module.model(obs_next)
+            predictions.append(self.module.rewardModel(states, states_next))
+            gt_reward.append(rwd)
+        return np.argmax(detachToNumpy(torch.cat(predictions, dim=0)), axis=-1), detachToNumpy(torch.cat(gt_reward, dim=0))
     def learn(self, *args, **kwargs):
         """
         Function called to learn a state representation
@@ -495,12 +512,13 @@ class SRL4robotics(BaseLearner):
                                                          loss_manager, weight=self.losses_weights_dict['inverse'])
                         if self.use_reward_loss:
                             rewards_st = np.array(reward).copy()
-                            rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) ## TODO
+                            # label are usually [-1, 0, 1] for non-shaped-reward
+                            rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device) 
                             label_weights = torch.tensor([1.0, 100.0]).to(self.device)
-                            assert 1==2
                             self.module.add_reward_loss(states, rewards_st, next_states, loss_manager,
                                                         label_weights=label_weights, ignore_index=-1, ## TODO
                                                         weight=self.losses_weights_dict['reward'])
+                        assert not self.use_reward2_loss, "reward2 model is only supported by 'split' srl model."
                     else:  # TODO UGLY
                         split_dim_list = [a for a in list(self.split_dimensions.values()) if a != -1]
                         states_split_list = torch.split(states, split_dim_list, dim=-1)
@@ -529,16 +547,11 @@ class SRL4robotics(BaseLearner):
                             rewards_st = np.array(reward).copy()
                             rewards_st = 1-rewards_st
                             rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
+                            # label are usually [-1, 0, 1] for non-shaped-reward, now it's [2, 1, 0]
                             label_weights = torch.tensor([100.0, 1.0]).to(self.device)
+                            ## distance_state should be estimated for 'next_state'
                             distance_state = (next_states_split_list[state_index["reward2"]
                                                                     ] - next_states_split_list[state_index["inverse"]])**2
-                            # self.module.add_reward_loss(states_split_list[state_index["reward"]],
-                            #                             rewards_st, 
-                            #                             distance_state,
-                            #                             loss_manager,
-                            #                             label_weights=label_weights, 
-                            #                             ignore_index=2,
-                            #                             weight=self.losses_weights_dict['reward'])
                             self.module.add_reward2_loss(distance_state,
                                                         rewards_st, 
                                                         loss_manager,
@@ -550,7 +563,16 @@ class SRL4robotics(BaseLearner):
                                                         loss_manager,
                                                        weight=self.losses_weights_dict['spcls'])
                         if self.use_reward_loss:
-                            raise NotImplementedError
+                            rewards_st = np.array(reward).copy()
+                            # label are usually [-1, 0, 1] for non-shaped-reward
+                            rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
+                            label_weights = torch.tensor([1.0, 100.0]).to(self.device)
+                            self.module.add_reward_loss(states_split_list[state_index["reward"]],
+                                                        rewards_st, 
+                                                        next_states_split_list[state_index["reward"]],
+                                                        loss_manager,
+                                                        label_weights=label_weights, ignore_index=-1,
+                                                        weight=self.losses_weights_dict['reward'])
 
                     if self.use_gan:
                         # GAN's training requires multi-optimizers.
@@ -647,7 +669,7 @@ class SRL4robotics(BaseLearner):
                                 # next_state_pred = next_states_split_list[state_index["reward"]] # self.module.model(next_obs)
                                 distance_state = (next_states_split_list[state_index["reward2"]
                                                                          ] - next_states_split_list[state_index["inverse"]])**2
-                                rwd_pred = self.module.rewardModel(state_pred.detach(), distance_state.detach())
+                                rwd_pred = self.module.rewardModel2(distance_state.detach())
                                 rwd_pred = torch.argmax(rwd_pred, dim=-1)
                                 rwd_acc = torch.sum(rewards_st == rwd_pred).float() / rewards_st.numel()
                                 rwd_acc = rwd_acc.item()
@@ -691,7 +713,7 @@ class SRL4robotics(BaseLearner):
                                         (iter_ind+1)/n_batch_per_epoch, val_loss_str, val_acc, val_inv_acc, val_rwd_acc, val_cls_acc, time.time() - start_time), end="")
                         elif monitor_mode == 'pbar':
                             pbar.update(1)
-                    else:  # ============= Main update ====================
+                    else:  # ============= Main update for usual srl model ====================
 
                         # Compute weighted average of losses of encoder part (including 'forward'/'inverse'/'reward' models)
                         loss = self.module.model.train_on_batch(
@@ -715,21 +737,29 @@ class SRL4robotics(BaseLearner):
                                     inv_acc = 0
                                 else:
                                     inv_acc = 0
-                                state_pred = states_split_list[state_index["reward2"]] # self.module.model(obs)
-                                # self.module.model(next_obs)
-                                distance_state = (next_states_split_list[state_index["reward2"]] - next_state_pred)**2
-                                rwd_pred = self.module.rewardModel(state_pred.detach(), distance_state.detach())
-                                rwd_pred = torch.argmax(rwd_pred, dim=-1)
-                                rwd_acc = torch.sum(rewards_st == rwd_pred).float() / rewards_st.numel()
-                                rwd_acc = rwd_acc.item()
+                                if self.use_reward2_loss:
+                                    state_pred = states_split_list[state_index["reward2"]]
+                                    distance_state = (next_states_split_list[state_index["reward2"]] - next_state_pred)**2
+                                    rwd_pred = self.module.rewardModel2(distance_state.detach())
+                                    rwd_pred = torch.argmax(rwd_pred, dim=-1)
+                                    rwd_acc = torch.sum(rewards_st == rwd_pred).float() / rewards_st.numel()
+                                    rwd_acc = rwd_acc.item()
 
-                                cls_pred = self.module.classifier(state_pred.detach())
-                                cls_pred = torch.argmax(cls_pred, dim=-1)
-                                cls_acc = torch.sum(cls_pred == cls_gt).float() / cls_gt.numel()
-                                cls_acc = cls_acc.item()
+                                    cls_pred = self.module.classifier(state_pred.detach())
+                                    cls_pred = torch.argmax(cls_pred, dim=-1)
+                                    cls_acc = torch.sum(cls_pred == cls_gt).float() / cls_gt.numel()
+                                    cls_acc = cls_acc.item()
+                                if self.use_reward_loss:
+                                    state_pred = states_split_list[state_index["reward"]]
+                                    next_state_pred = next_states_split_list[state_index["reward"]]
+                                    rwd_pred = self.module.rewardModel(state_pred.detach(), next_state_pred.detach())
+                                    rwd_pred = torch.argmax(rwd_pred, dim=-1)
+                                    rwd_acc = torch.sum(rewards_st == rwd_pred).float() / rewards_st.numel()
+                                    rwd_acc = rwd_acc.item()
+                                    # raise NotImplementedError
+                                    cls_acc = 0.0
                         else:
-                            assert not self.use_reward_loss ## Not supported yet! HACK TODO
-                            rwd_acc = 0.0
+                            assert not self.use_reward2_loss, "reward2 is only supported by split model."
                             cls_acc = 0.0
                             if self.use_inverse_loss:
                                 act_pred = self.module.inverseModel(states, next_states)
@@ -738,6 +768,14 @@ class SRL4robotics(BaseLearner):
                                 inv_acc = inv_acc.item()
                             else:
                                 inv_acc = 0.0
+                            if self.use_reward_loss:
+                                state_pred = states_split_list[state_index["reward"]]
+                                next_state_pred = next_states_split_list[state_index["reward"]]
+                                rwd_pred = self.module.rewardModel(state_pred.detach(), next_state_pred.detach())
+                                rwd_pred = torch.argmax(rwd_pred, dim=-1)
+                                rwd_acc = torch.sum(rewards_st == rwd_pred).float() / rewards_st.numel()
+                                rwd_acc = rwd_acc.item()
+                                raise NotImplementedError
                                                     
                         # Loss: accumulate scalar loss
                         epoch_loss += loss
@@ -833,7 +871,13 @@ class SRL4robotics(BaseLearner):
                             f1_score = 2*f1_a/(2*f1_a+f1_b+f1_c)
                             recall = f1_a / (f1_a + f1_c)
                         elif self.use_reward_loss:
-                            raise NotImplementedError
+                            reward_pred, reward_gt = self.predRewardsWithDataLoader0(dataloader_test2)
+                            f1_a = np.sum(((reward_gt-reward_pred) == 0) * (reward_pred == 1))
+                            f1_b = np.sum(((reward_pred-reward_gt) == 1) * (reward_pred == 1))
+                            f1_c = np.sum(((reward_pred-reward_gt) != 0) * (reward_gt == 1))
+                            f1_score = 2*f1_a/(2*f1_a+f1_b+f1_c)
+                            recall = f1_a / (f1_a + f1_c)
+                            # raise NotImplementedError
                         plotRepresentation(state_pred, rewards,
                                            #    add_colorbar=epoch == 0,
                                            fit_pca=False,

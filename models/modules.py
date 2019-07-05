@@ -133,7 +133,6 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
                         label_weights=label_weights, ignore_index=ignore_index)
     def add_reward2_loss(self, states, rewards_st, loss_manager, label_weights, ignore_index=-1, weight=100.0):
         rewards_pred = self.rewardModel2(states)
-        # import ipdb; ipdb.set_trace()
         rewardModelLoss(rewards_pred, rewards_st, weight=weight, loss_manager=loss_manager,
                         label_weights=label_weights, ignore_index=ignore_index)
     

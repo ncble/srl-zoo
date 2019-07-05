@@ -92,9 +92,9 @@ class BaseRewardModel(BaseModelSRL):
         :param next_state: (torch.Tensor)
         :return: (torch.Tensor)
         """
-        # return self.reward_net(torch.cat((state, next_state), dim=1))
-        # return self.reward_net(state)
-        return self.reward_net(next_state)
+        return self.reward_net(torch.cat((state, next_state), dim=1))
+
+        
 
 
 class BaseRewardModel2(BaseModelSRL):
