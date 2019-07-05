@@ -282,6 +282,74 @@ class GANTrainer(BaseTrainer):
     def reconstruct(self, x):
         return self.generator(self.encoder(x))
 
+    def train_on_batch(obs, next_obs,
+                       optimizer_D, optimizer_G, optimizer_E,
+                       loss_manager_D, loss_manager_G, loss_manager_E,
+                       epoch_batches_D, epoch_batches_G, epoch_batches_E,
+                       epoch_loss_D, epoch_loss_G, epoch_loss_E,
+                       batch_size=32,
+                       dataloader=None,
+                       valid_mode=False, device=torch.device('cpu')):
+        label_valid = torch.ones((batch_size, 1)).to(self.device)
+        label_fake = torch.zeros((batch_size, 1)).to(self.device)
+        if not valid_mode:
+            # === Train the Discriminator ===
+            D_steps = 3 if (d_acc < 0.8) else 1
+            G_steps = 3 if (g_acc < 0.2) else 1
+            acc_cum = 0
+            for _ in range(D_steps):
+                optimizer_D.zero_grad()
+                loss_manager_D.resetLosses()
+                (sample_idx, obs, next_obs, action, reward, cls_gt) = next(dataloader)
+                cls_gt = cls_gt.to(device)
+                obs = obs.to(device)
+                # re-define the length label_valid/label_fake, because obs.size(0) changes
+                d_loss, d_acc = self.train_on_batch_D(obs, label_valid[:obs.size(0)], label_fake[:obs.size(
+                    0)], optimizer_D, loss_manager_D, valid_mode=valid_mode, device=device)
+                epoch_loss_D += d_loss
+                epoch_batches_D += 1
+                acc_cum += d_acc
+            d_acc = acc_cum / D_steps
+
+            # === Train the Generator ===
+            acc_cum = 0
+            for _ in range(G_steps):
+                optimizer_G.zero_grad()
+                loss_manager_G.resetLosses()
+                (sample_idx, obs, next_obs, action, reward, cls_gt) = next(dataloader)
+                cls_gt = cls_gt.to(device)
+                obs = obs.to(device)
+                # re-define the length label_valid, because obs.size(0) changes
+                g_loss, g_acc = self.train_on_batch_G(obs, label_valid[:obs.size(
+                    0)], optimizer_G, loss_manager_G, valid_mode=valid_mode, device=device)
+                epoch_loss_G += g_loss
+                epoch_batches_G += 1
+                acc_cum += g_acc
+            g_acc = acc_cum / G_steps
+        # === Train the Encoder and the other components (e.g. forward/inverse/reward model) ===
+        E_steps = 10 if not valid_mode else 1
+        for _ in range(E_steps):
+            optimizer_E.zero_grad()
+            loss_manager.resetLosses()
+            (sample_idx, obs, next_obs, action, reward, cls_gt) = next(dataloader)
+            obs, next_obs = obs.to(device), next_obs.to(device)
+            cls_gt = cls_gt.to(device)
+            e_loss = self.train_on_batch_E(
+                obs, next_obs, optimizer_E, loss_manager, valid_mode=valid_mode, device=device)
+            epoch_loss_E += e_loss
+            epoch_batches_E += 1
+        if not valid_mode:
+            train_loss_D = epoch_loss_D / float(epoch_batches_D)
+            train_loss_G = epoch_loss_G / float(epoch_batches_G)
+            train_loss = epoch_loss_E / float(epoch_batches_E)
+            return train_loss, d_acc, g_acc
+        else:
+            val_loss = epoch_loss_E / float(epoch_batches_E)
+            return val_loss
+ 
+        
+    
+
 
 if __name__ == "__main__":
     print("Start")
