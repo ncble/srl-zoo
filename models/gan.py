@@ -219,17 +219,146 @@ class EncoderUnet(BaseModelSRL):
         return x
 
 
+class EncoderResNet(BaseModelSRL):
+    """
+
+    Note: Only Encoder has getStates method.
+    """
+
+    def __init__(self, state_dim, img_shape,
+                 spectral_norm=False):
+        super().__init__(state_dim=state_dim, img_shape=img_shape)
+        assert img_shape[0] < 10, "Pytorch uses 'channel first' convention."
+        self.state_dim = state_dim
+        self.img_shape = img_shape
+        self.spectral_norm = spectral_norm
+
+        if self.spectral_norm:
+            self.encoder_conv = nn.Sequential(
+                ConvSN2d(self.img_shape[0], 64, kernel_size=7, stride=2, padding=3, bias=True),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+
+                ConvSN2d(64, 64, kernel_size=3, stride=1, padding=1, bias=True),  # TODO TODO bias TRUE?
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=3, stride=2),
+
+                ConvSN2d(64, 64, kernel_size=3, stride=2, padding=1, bias=True),  # TODO TODO bias TRUE?
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=3, stride=2)
+            )
+
+        else:
+            self.encoder_conv = nn.Sequential(
+                nn.Conv2d(self.img_shape[0], 64, kernel_size=7, stride=2, padding=3, bias=True),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+
+                nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=True),  # TODO TODO bias TRUE?
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=3, stride=2),
+
+                nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=True),  # TODO TODO bias TRUE?
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=3, stride=2)
+            )
+        outshape = summary(self.encoder_conv, self.img_shape, show=False)  # [-1, channels, high, width]
+        self.img_height, self.img_width = outshape[-2:]
+        self.encoder_fc = nn.Sequential(
+            nn.Linear(self.img_height * self.img_width * 64, self.state_dim)
+        )
+
+    def forward(self, x):
+        encoded = self.encoder_conv(x)
+        encoded = encoded.view(encoded.size(0), -1)
+        return self.encoder_fc(encoded)
+
+
+class GeneratorResNet(BaseModelSRL):
+    """
+    ResNet Generator
+    """
+
+    def __init__(self, state_dim, img_shape,
+                 spectral_norm=False):
+        super().__init__(state_dim=state_dim, img_shape=img_shape)
+        assert img_shape[0] < 10, "Pytorch uses 'channel first' convention."
+        self.state_dim = state_dim
+        self.img_shape = img_shape
+        self.spectral_norm = spectral_norm
+
+        if self.spectral_norm:
+            self.decoder_conv = nn.Sequential(
+                ConvTransposeSN2d(64, 64, kernel_size=3, stride=2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+
+                ConvTransposeSN2d(64, 64, kernel_size=3, stride=2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+
+                ConvTransposeSN2d(64, 64, kernel_size=3, stride=2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+
+                ConvTransposeSN2d(64, 64, kernel_size=3, stride=2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+
+                ConvTransposeSN2d(64, self.img_shape[0], kernel_size=4, stride=2),
+                nn.Tanh()
+            )
+
+        else:
+            self.decoder_conv = nn.Sequential(
+                nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+
+                nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+
+                nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+
+                nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+
+                nn.ConvTranspose2d(64, self.img_shape[0], kernel_size=4, stride=2),
+                nn.Tanh()
+            )
+        self.decoder_fc = nn.Sequential(
+            nn.Linear(state_dim, self.img_height * self.img_width * 64)
+        )
+
+    def forward(self, x):
+        decoded = self.decoder_fc(x)
+        decoded = decoded.view(x.size(0), 64, self.img_height, self.img_width)
+        return self.decoder_conv(decoded)
+
+
 class GANTrainer(BaseTrainer):
-    def __init__(self, img_shape=None, state_dim=2):
+    def __init__(self, state_dim=2, img_shape=None):
         super().__init__()
         self.img_shape = img_shape
         self.state_dim = state_dim
 
     def build_model(self, model_type='unet'):
-        if model_type == "unet":
+        if model_type == 'unet':
             self.encoder = EncoderUnet(self.state_dim, self.img_shape, spectral_norm=False)
             self.generator = GeneratorUnet(self.state_dim, self.img_shape, spectral_norm=True)
             self.discriminator = Discriminator(self.state_dim, self.img_shape, spectral_norm=True)
+        elif model_type == 'custom_cnn':
+
         else:
             raise NotImplementedError
 

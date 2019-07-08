@@ -588,11 +588,12 @@ class SRL4robotics(BaseLearner):
                                                                 dataloader=dataloader,
                                                                 valid_mode=valid_mode,
                                                                 device=self.device)
+                        epoch_batches += 1 ## update batch count
                         if not valid_mode:
-                            # mean training loss so far
+                            # mean training loss so far. For gan, it's already the mean.
                             train_loss = loss
                         else:
-                            # mean validation loss so far
+                            # mean validation loss so far. For gan, it's already the mean.
                             val_loss = loss
                         # Custom/Optional plots: training too long, display/save img during training.
                         if iter_ind % 20 == 0 and not valid_mode:
@@ -619,9 +620,11 @@ class SRL4robotics(BaseLearner):
                         # Compute weighted average of losses of encoder part (including 'forward'/'inverse'/'reward' models)
                         loss = self.module.model.train_on_batch(
                             obs, next_obs, self.optimizer, loss_manager, valid_mode=valid_mode, device=self.device)
+                        history_message = ""
                         epoch_loss += loss
+                        epoch_batches += 1
                         if not valid_mode:
-                                # mean training loss so far
+                            # mean training loss so far
                             train_loss = epoch_loss / float(epoch_batches)
                         else:
                             # mean validation loss so far
@@ -693,13 +696,7 @@ class SRL4robotics(BaseLearner):
                     ep_rwd_acc += rwd_acc
                     ep_inv_acc += inv_acc
                     ep_cls_acc += cls_acc
-                    epoch_batches += 1
-                    # if not valid_mode:
-                    #     # mean training loss so far
-                    #     train_loss = epoch_loss / float(epoch_batches)
-                    # else:
-                    #     # mean validation loss so far
-                    #     val_loss = epoch_loss / float(epoch_batches)
+                    
                     if valid_mode:
                         val_rwd_acc = ep_rwd_acc / float(epoch_batches)
                         val_inv_acc = ep_inv_acc / float(epoch_batches)
@@ -731,7 +728,7 @@ class SRL4robotics(BaseLearner):
                                                                        N_EPOCHS, (iter_ind+1)/n_batch_per_epoch, current_loss))
 
             # Even if loss_history is modified by LossManager
-            # we make it explicit
+            # we make it explicit ???
 
             def update_loss_history(loss_manager, train_loss, val_loss, epoch_batches, epoch):
                 loss_history = loss_manager.loss_history

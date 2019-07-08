@@ -83,7 +83,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
             self.model = VAETrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type)
         elif 'gan' in losses:
-            self.model = GANTrainer(img_shape=self.img_shape, state_dim=state_dim)
+            self.model = GANTrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type)
         else:
             # for losses not depending on specific architecture (supervised, inverse, forward..)

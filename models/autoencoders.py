@@ -156,8 +156,8 @@ class UNetAutoEncoder(BaseModelAutoEncoder):
 
     def __init__(self, state_dim=3, img_shape=(3, 224, 224)):
         super(UNetAutoEncoder, self).__init__(state_dim=state_dim, img_shape=img_shape)
-        self.decoder = GeneratorUnet(img_shape, state_dim, unet_bn=True)
-        self.encoder = EncoderUnet(img_shape, state_dim, unet_bn=True)
+        self.decoder = GeneratorUnet(state_dim, img_shape, unet_bn=True)
+        self.encoder = EncoderUnet(state_dim, img_shape, unet_bn=True)
 
     def encode(self, x):
         """
