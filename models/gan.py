@@ -282,16 +282,19 @@ class GANTrainer(BaseTrainer):
     def reconstruct(self, x):
         return self.generator(self.encoder(x))
 
-    def train_on_batch(obs, next_obs,
+    def train_on_batch(self, obs, next_obs,
                        optimizer_D, optimizer_G, optimizer_E,
                        loss_manager_D, loss_manager_G, loss_manager_E,
                        epoch_batches_D, epoch_batches_G, epoch_batches_E,
                        epoch_loss_D, epoch_loss_G, epoch_loss_E,
+                       d_acc, g_acc,
                        batch_size=32,
                        dataloader=None,
-                       valid_mode=False, device=torch.device('cpu')):
-        label_valid = torch.ones((batch_size, 1)).to(self.device)
-        label_fake = torch.zeros((batch_size, 1)).to(self.device)
+                       valid_mode=False,
+                       device=torch.device('cpu')):
+        # import ipdb; ipdb.set_trace()
+        label_valid = torch.ones((batch_size, 1)).to(device)
+        label_fake = torch.zeros((batch_size, 1)).to(device)
         if not valid_mode:
             # === Train the Discriminator ===
             D_steps = 3 if (d_acc < 0.8) else 1
@@ -330,25 +333,35 @@ class GANTrainer(BaseTrainer):
         E_steps = 10 if not valid_mode else 1
         for _ in range(E_steps):
             optimizer_E.zero_grad()
-            loss_manager.resetLosses()
+            loss_manager_E.resetLosses()
             (sample_idx, obs, next_obs, action, reward, cls_gt) = next(dataloader)
             obs, next_obs = obs.to(device), next_obs.to(device)
             cls_gt = cls_gt.to(device)
             e_loss = self.train_on_batch_E(
-                obs, next_obs, optimizer_E, loss_manager, valid_mode=valid_mode, device=device)
+                obs, next_obs, optimizer_E, loss_manager_E, valid_mode=valid_mode, device=device)
             epoch_loss_E += e_loss
             epoch_batches_E += 1
         if not valid_mode:
             train_loss_D = epoch_loss_D / float(epoch_batches_D)
             train_loss_G = epoch_loss_G / float(epoch_batches_G)
             train_loss = epoch_loss_E / float(epoch_batches_E)
-            return train_loss, d_acc, g_acc
+
         else:
             val_loss = epoch_loss_E / float(epoch_batches_E)
-            return val_loss
- 
+
         
-    
+        if not valid_mode:
+            loss = train_loss
+            history_message = "D_loss: {:.4f} acc: {:.1%} G_loss: {:.4f} acc: {:.1%}".format(
+                train_loss_D, d_acc, train_loss_G, g_acc)
+        else:
+            loss = val_loss
+            # val_loss_str = "{:.2f}*".format(
+            #     val_loss) if val_loss < best_error else "{:.2f}".format(val_loss)
+            history_message = " "
+
+
+        return loss, history_message
 
 
 if __name__ == "__main__":
