@@ -11,7 +11,7 @@ except:
     from models.base_models import BaseModelSRL, ConvSN2d, ConvTransposeSN2d, LinearSN, UNet
     from models.base_trainer import BaseTrainer
     from losses.losses import ganNonSaturateLoss, autoEncoderLoss, ganBCEaccuracy, AEboundLoss
-
+from torchsummary import summary
 
 class GeneratorUnet(nn.Module):
     def __init__(self, state_dim, img_shape,
@@ -240,12 +240,12 @@ class EncoderResNet(BaseModelSRL):
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
 
-                ConvSN2d(64, 64, kernel_size=3, stride=1, padding=1, bias=True),  # TODO TODO bias TRUE?
+                ConvSN2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False),  # TODO TODO bias TRUE?
                 nn.BatchNorm2d(64),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=3, stride=2),
 
-                ConvSN2d(64, 64, kernel_size=3, stride=2, padding=1, bias=True),  # TODO TODO bias TRUE?
+                ConvSN2d(64, 64, kernel_size=3, stride=2, padding=1, bias=False),  # TODO TODO bias TRUE?
                 nn.BatchNorm2d(64),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=3, stride=2)
@@ -258,12 +258,12 @@ class EncoderResNet(BaseModelSRL):
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
 
-                nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=True),  # TODO TODO bias TRUE?
+                nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False),  # TODO TODO bias TRUE?
                 nn.BatchNorm2d(64),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=3, stride=2),
 
-                nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=True),  # TODO TODO bias TRUE?
+                nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=False),  # TODO TODO bias TRUE?
                 nn.BatchNorm2d(64),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=3, stride=2)
@@ -285,14 +285,19 @@ class GeneratorResNet(BaseModelSRL):
     ResNet Generator
     """
 
-    def __init__(self, state_dim, img_shape,
-                 spectral_norm=False):
+    def __init__(self, state_dim, img_shape, in_shape, spectral_norm=False):
         super().__init__(state_dim=state_dim, img_shape=img_shape)
         assert img_shape[0] < 10, "Pytorch uses 'channel first' convention."
         self.state_dim = state_dim
+        self.in_shape = in_shape
         self.img_shape = img_shape
         self.spectral_norm = spectral_norm
 
+        _, self.in_height, self.in_width = self.in_shape ## [channel, high, width]
+
+        self.decoder_fc = nn.Sequential(
+            nn.Linear(state_dim, self.in_height * self.in_width * 64)
+        )
         if self.spectral_norm:
             self.decoder_conv = nn.Sequential(
                 ConvTransposeSN2d(64, 64, kernel_size=3, stride=2),
@@ -336,13 +341,11 @@ class GeneratorResNet(BaseModelSRL):
                 nn.ConvTranspose2d(64, self.img_shape[0], kernel_size=4, stride=2),
                 nn.Tanh()
             )
-        self.decoder_fc = nn.Sequential(
-            nn.Linear(state_dim, self.img_height * self.img_width * 64)
-        )
+        
 
     def forward(self, x):
         decoded = self.decoder_fc(x)
-        decoded = decoded.view(x.size(0), 64, self.img_height, self.img_width)
+        decoded = decoded.view(x.size(0), 64, self.in_height, self.in_width)
         return self.decoder_conv(decoded)
 
 
@@ -358,7 +361,10 @@ class GANTrainer(BaseTrainer):
             self.generator = GeneratorUnet(self.state_dim, self.img_shape, spectral_norm=True)
             self.discriminator = Discriminator(self.state_dim, self.img_shape, spectral_norm=True)
         elif model_type == 'custom_cnn':
-
+            self.encoder = EncoderResNet(self.state_dim, self.img_shape, spectral_norm=False)
+            outshape = summary(self.encoder.encoder_conv, self.img_shape, show=False) # [-1, channels, high, width]
+            self.generator = GeneratorResNet(self.state_dim, self.img_shape, outshape[1:], spectral_norm=True)
+            self.discriminator = Discriminator(self.state_dim, self.img_shape, spectral_norm=True)
         else:
             raise NotImplementedError
 

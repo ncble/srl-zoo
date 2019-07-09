@@ -122,6 +122,9 @@ class VAETrainer(nn.Module):
         return loss
 
     def reconstruct(self, x):
+        """
+        This function is used for the visualization (testing/validation mode) only. Not for the training.
+        """
         return self.model.decode(self.model.encode(x)[0])
 
     def encode(self, x):
@@ -131,6 +134,9 @@ class VAETrainer(nn.Module):
         return self.model.decode(x)
 
     def forward(self, x):
+        """
+        All srl model should return the 'state' via 'forward' function.
+        """
         return self.model.encode(x)[0]  # or self.model(x)
 
 
