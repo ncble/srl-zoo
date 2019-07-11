@@ -146,6 +146,125 @@ class CNNAutoEncoder(BaseModelAutoEncoder):
         return self.decoder_conv(decoded)
 
 
+<<<<<<< HEAD
+class UNetEncoder(nn.Module):
+    """
+
+    Note: Only Encoder has getStates method.
+    """
+
+    def __init__(self, img_shape, state_dim,
+                 unet_depth=2,  # 3
+                 unet_ch=16,
+                 unet_bn=False,
+                 unet_drop=0.0,
+                 spectral_norm=False):
+        super().__init__()
+        assert img_shape[0] < 10, "Pytorch uses 'channel first' convention."
+        self.state_dim = state_dim
+        self.img_shape = img_shape
+        self.spectral_norm = spectral_norm
+        self.unet_depth = unet_depth
+        self.unet_ch = unet_ch
+        self.unet_drop = unet_drop
+        self.unet_bn = unet_bn
+        self.activations = nn.ModuleDict([
+            ['lrelu', nn.LeakyReLU(negative_slope=0.2)],
+            ['prelu', nn.PReLU()],
+            ['tanh', nn.Tanh()],
+            ['relu', nn.ReLU()],
+            ['sigmoid', nn.Sigmoid()]
+        ])
+        self.unet = UNet(in_ch=self.img_shape[0], include_top=False, depth=self.unet_depth, start_ch=self.unet_ch,
+                         batch_norm=self.unet_bn, spec_norm=self.spectral_norm, dropout=self.unet_drop, up_mode='upconv', out_ch=1)
+        prev_channels = self.unet.out_ch
+
+        self.modules_list = nn.ModuleList([])
+
+        if self.spectral_norm:
+            inter_features = 1 * (self.img_shape[1]//2**2) * (self.img_shape[2]//2**2)
+            self.modules_list.append(ConvSN2d(prev_channels, 1, kernel_size=4, stride=2, padding=1))
+            self.modules_list.append(self.activations['lrelu'])
+            self.modules_list.append(ConvSN2d(1, 1, kernel_size=4, stride=2, padding=1))
+            self.modules_list.append(self.activations['lrelu'])
+            self.before_last = LinearSN(inter_features, 100, bias=True)
+            self.last = LinearSN(100, self.state_dim, bias=True)
+        else:
+            inter_features = 1 * (self.img_shape[1]//2**2) * (self.img_shape[2]//2**2)
+            self.modules_list.append(nn.Conv2d(prev_channels, 1, kernel_size=4, stride=2, padding=1))
+            self.modules_list.append(self.activations['lrelu'])
+            self.modules_list.append(nn.Conv2d(1, 1, kernel_size=4, stride=2, padding=1))
+            self.modules_list.append(self.activations['lrelu'])
+            self.before_last = nn.Linear(inter_features, 100, bias=True)
+            self.last = nn.Linear(100, self.state_dim, bias=True)
+
+    def forward(self, x):
+        x = self.unet(x)
+        for layer in self.modules_list:
+            x = layer(x)
+        x = x.view(x.size(0), -1)  # flatten
+        x = self.before_last(x)
+        x = self.activations['lrelu'](x)
+        x = self.last(x)
+        return x
+
+
+class UNetGenerator(nn.Module):
+    def __init__(self, img_shape, state_dim,
+                 unet_depth=2,  # 3
+                 unet_ch=16,  # 32
+                 spectral_norm=False,
+                 unet_bn=False,
+                 unet_drop=0.0):
+        super().__init__()
+        self.state_dim = state_dim
+        self.img_shape = img_shape
+        self.spectral_norm = spectral_norm
+        self.unet_depth = unet_depth
+        self.unet_ch = unet_ch
+        self.unet_drop = unet_drop
+        self.unet_bn = unet_bn
+        # self.lipschitz_G = 1.1 [TODO]
+        assert self.img_shape[0] < 10, "Pytorch uses 'channel first' convention."
+        if self.spectral_norm:
+            # state_layer = DenseSN(np.prod(self.img_shape), activation=None, lipschitz=self.lipschitz_G)(state_input)
+            self.first = LinearSN(
+                self.state_dim, np.prod(self.img_shape), bias=True)
+        else:
+            self.first = nn.Linear(
+                self.state_dim, np.prod(self.img_shape), bias=True)
+
+        self.activations = nn.ModuleDict([
+            ['lrelu', nn.LeakyReLU(negative_slope=0.2)],
+            ['prelu', nn.PReLU()],
+            ['tanh', nn.Tanh()],
+            ['relu', nn.ReLU()]
+        ])
+
+        out_channels = self.img_shape[0]  # = 3
+        in_channels = out_channels
+        self.unet = UNet(in_ch=in_channels, include_top=False, depth=self.unet_depth, start_ch=self.unet_ch,
+                         batch_norm=self.unet_bn, spec_norm=self.spectral_norm, dropout=self.unet_drop, up_mode='upconv', out_ch=out_channels)
+        prev_channels = self.unet.out_ch
+        if self.spectral_norm:
+            self.last = ConvSN2d(prev_channels, out_channels,
+                                 kernel_size=3, stride=1, padding=1)
+        else:
+            self.last = nn.Conv2d(
+                prev_channels, out_channels, kernel_size=3, stride=1, padding=1)
+
+    def forward(self, x):
+        x = self.first(x)
+        x = self.activations['lrelu'](x)
+        x = x.view(x.size(0), *self.img_shape)
+        x = self.unet(x)
+        x = self.last(x)
+        x = self.activations['tanh'](x)
+        return x
+
+
+=======
+>>>>>>> debug2_tempo
 class UNetAutoEncoder(BaseModelAutoEncoder):
     """
     Custom UNet autoencoder network
@@ -154,8 +273,13 @@ class UNetAutoEncoder(BaseModelAutoEncoder):
 
     def __init__(self, state_dim=3, img_shape=(3, 224, 224)):
         super(UNetAutoEncoder, self).__init__(state_dim=state_dim, img_shape=img_shape)
+<<<<<<< HEAD
+        self.decoder = UNetGenerator(img_shape, state_dim, unet_bn=True)
+        self.encoder = UNetEncoder(img_shape, state_dim, unet_bn=True)
+=======
         self.decoder = GeneratorUnet(state_dim, img_shape, unet_bn=True)
         self.encoder = EncoderUnet(state_dim, img_shape, unet_bn=True)
+>>>>>>> debug2_tempo
 
     def encode(self, x):
         """

@@ -21,7 +21,7 @@ from losses.losses import LossManager, autoEncoderLoss, roboticPriorsLoss, tripl
 from losses.utils import findPriorsPairs
 from pipeline import NAN_ERROR
 from plotting.representation_plot import plotRepresentation, plotImage, printGTC
-from preprocessing.data_loader import RobotEnvDataset
+from preprocessing.data_loader import RobotEnvDataset, StratifiedSampler, BalancedLabelSampler
 from preprocessing.utils import deNormalize
 from utils import printRed, detachToNumpy, printYellow
 from .modules import SRLModules
@@ -274,7 +274,11 @@ class SRL4robotics(BaseLearner):
         # Default weights that are updated with the weights passed to the script
         self.losses_weights_dict = {"forward": 1.0, "inverse": 2.0, "reward": 100.0, "reward2": 100.0, "spcls": 100.0,
                                     "episode-prior": 1.0, "reward-prior": 10, "triplet": 1.0,
+<<<<<<< HEAD
                                     "autoencoder": 1.0, "vae": 1.0, "perceptual": 1e-6, "dae": 1.0,
+=======
+                                    "autoencoder": 1.0, "vae": 0.5e-6, "dae": 1.0,
+>>>>>>> debug2_tempo
                                     'l1_reg': l1_reg, "l2_reg": l2_reg, 'random': 1.0}
         self.occlusion_percentage = occlusion_percentage
         self.state_dim_dae = state_dim_dae
@@ -567,6 +571,39 @@ class SRL4robotics(BaseLearner):
                             rewards_st = np.array(reward).copy()
                             # label are usually [-1, 0, 1] for non-shaped-reward
                             rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
+<<<<<<< HEAD
+                            label_weights = torch.tensor([0.0, 100.0]).to(self.device)
+                            self.module.add_reward_loss(states_split_list[state_index["reward"]],
+                                                        rewards_st, 
+                                                        next_states_split_list[state_index["reward"]], 
+                                                        loss_manager,
+                                                        label_weights=label_weights, 
+                                                        ignore_index=-1)
+
+                    # if self.use_vae:
+                    #     if self.perceptual_similarity_loss:
+                    #         perceptualSimilarityLoss(states_denoiser, states_denoiser_predicted, next_states_denoiser,
+                    #                                 next_states_denoiser_predicted,
+                    #                                 weight=self.losses_weights_dict['perceptual'],
+                    #                                 loss_manager=loss_manager)
+                    #     else:
+                    #         generationLoss(reconstruct_obs, next_decoded_obs, obs, next_obs,
+                    #                     weight=self.losses_weights_dict['vae'], loss_manager=loss_manager)
+                    # if self.reward_prior:
+                    #     rewards_st = reward
+                    #     rewards_st = torch.from_numpy(rewards_st).float().view(-1, 1).to(self.device)
+                    #     rewardPriorLoss(states, rewards_st, weight=self.losses_weights_dict['reward-prior'],
+                    #                     loss_manager=loss_manager)
+                    # if self.episode_prior:
+                    #     episodePriorLoss(minibatch_idx, minibatch_episodes, states, self.prior_discriminator,
+                    #                     BALANCED_SAMPLING, weight=self.losses_weights_dict['episode-prior'],
+                    #                     loss_manager=loss_manager)
+                    # if self.use_triplets:
+                    #     tripletLoss(states, positive_states, negative_states, weight=self.losses_weights_dict['triplet'],
+                    #                 loss_manager=loss_manager, alpha=0.2)
+                    if self.model_type == 'gan':
+                        # GAN's training requires multi-optimizers.
+=======
                             label_weights = torch.tensor([1.0, 100.0]).to(self.device)
                             self.module.add_reward_loss(states_split_list[state_index["reward"]],
                                                         rewards_st,
@@ -589,6 +626,7 @@ class SRL4robotics(BaseLearner):
                                                                 valid_mode=valid_mode,
                                                                 device=self.device)
                         epoch_batches += 1 ## update batch count
+>>>>>>> debug2_tempo
                         if not valid_mode:
                             # mean training loss so far. For gan, it's already the mean.
                             train_loss = loss
