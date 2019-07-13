@@ -26,7 +26,9 @@ from preprocessing.utils import deNormalize
 from utils import printRed, detachToNumpy, printYellow
 from .modules import SRLModules
 from .priors import Discriminator as PriorDiscriminator
-
+import resource
+rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
+resource.setrlimit(resource.RLIMIT_NOFILE, (2048, rlimit[1]))
 
 MAX_BATCH_SIZE_GPU = 256  # For plotting, max batch_size before having memory issues
 EPOCH_FLAG = 1  # Plot every 1 epoch
@@ -104,7 +106,7 @@ class BaseLearner(object):
         predictions = []
         gt_reward = []
 
-        for obs, obs_next, rwd in data_loader:
+        for obs, obs_next, rwd in tqdm(data_loader):
             if reward_name == 'reward':
                 obs = obs.to(self.device)
                 states = self.module.model(obs)
@@ -116,7 +118,7 @@ class BaseLearner(object):
                 states_next_split = torch.split(states_next, split_dim_list, dim=-1)
             if reward_name == 'reward2':
                 distance_state = (states_next_split[state_index[reward_name]] -
-                                  states_next_split[state_index['inverse']])**2  # TODO TODO TODO
+                                states_next_split[state_index['inverse']])**2  # TODO TODO TODO
                 rwd_pred = self.module.rewardModel2(distance_state)
             elif reward_name == 'reward':
                 if state_index is not None:  # use split
@@ -215,6 +217,7 @@ class SRL4robotics(BaseLearner):
             self.use_inverse_loss = "inverse" in losses
             self.use_reward_loss = "reward" in losses
             self.use_reward2_loss = "reward2" in losses
+            self.use_spcls_loss = "spcls" in losses
             self.no_priors = "priors" not in losses
             self.episode_prior = "episode-prior" in losses
             self.reward_prior = "reward-prior" in losses
@@ -444,6 +447,7 @@ class SRL4robotics(BaseLearner):
         best_error = np.inf
         best_acc = -np.inf
         best_f1 = -np.inf
+        best_gtc = -np.inf
         best_model_path = "{}/srl_model.pth".format(self.log_folder)
 
         # Random features, we don't need to train a model
@@ -544,6 +548,7 @@ class SRL4robotics(BaseLearner):
                                                          actions_st, next_states_split_list[state_index["inverse"]
                                                                                             ], loss_manager,
                                                          weight=self.losses_weights_dict['inverse'])
+                        
                         if self.use_reward2_loss:
                             rewards_st = np.array(reward).copy()
                             rewards_st = 1-rewards_st
@@ -559,10 +564,11 @@ class SRL4robotics(BaseLearner):
                                                          label_weights=label_weights,
                                                          ignore_index=2,
                                                          weight=self.losses_weights_dict['reward2'])
-                            self.module.add_spcls_loss(states_split_list[state_index["reward2"]],
-                                                       cls_gt,
-                                                       loss_manager,
-                                                       weight=self.losses_weights_dict['spcls'])
+                            if self.use_spcls_loss:
+                                self.module.add_spcls_loss(states_split_list[state_index["reward2"]],
+                                                        cls_gt,
+                                                        loss_manager,
+                                                        weight=self.losses_weights_dict['spcls'])
                         if self.use_reward_loss:
                             rewards_st = np.array(reward).copy()
                             # label are usually [-1, 0, 1] for non-shaped-reward
@@ -656,11 +662,13 @@ class SRL4robotics(BaseLearner):
                                 rwd_pred = torch.argmax(rwd_pred, dim=-1)
                                 rwd_acc = torch.sum(rewards_st == rwd_pred).float() / rewards_st.numel()
                                 rwd_acc = rwd_acc.item()
-
-                                cls_pred = self.module.classifier(state_pred.detach())
-                                cls_pred = torch.argmax(cls_pred, dim=-1)
-                                cls_acc = torch.sum(cls_pred == cls_gt).float() / cls_gt.numel()
-                                cls_acc = cls_acc.item()
+                                if self.use_spcls_loss:
+                                    cls_pred = self.module.classifier(state_pred.detach())
+                                    cls_pred = torch.argmax(cls_pred, dim=-1)
+                                    cls_acc = torch.sum(cls_pred == cls_gt).float() / cls_gt.numel()
+                                    cls_acc = cls_acc.item()
+                                else:
+                                    cls_acc = 0.0
                             if self.use_reward_loss:
                                 state_pred = states_split_list[state_index["reward"]]
                                 next_state_pred = next_states_split_list[state_index["reward"]]
@@ -798,7 +806,11 @@ class SRL4robotics(BaseLearner):
                                            fit_pca=False,
                                            name="Learned State Representation (Training Data)",
                                            path=os.path.join(figdir_repr, "Epoch_{}.png".format(epoch+1)))
-                        printGTC(state_pred, ground_truth, target_positions, truncate=truncate)
+                        _, current_mean_gtc = printGTC(state_pred, ground_truth, target_positions, truncate=truncate)
+                        if current_mean_gtc > best_gtc:
+                            best_gtc = current_mean_gtc                            
+                            best_gtc_model_path = ".".join(best_model_path.split(".")[:-1]) + "_gtc.pth"
+                            torch.save(self.module.state_dict(), best_gtc_model_path)
                         if self.use_autoencoder or self.use_vae or self.use_dae or self.use_gan:
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB
