@@ -436,14 +436,11 @@ class SRL4robotics(BaseLearner):
         loss_history = defaultdict(list)
         loss_manager = LossManager(self.module, loss_history)
 
-        if self.use_gan:
+        if self.use_gan: ## TODO it's ugly
             loss_history_D = defaultdict(list)
             loss_history_G = defaultdict(list)
             loss_manager_D = LossManager(self.module.model.discriminator, loss_history_D)
             loss_manager_G = LossManager(self.module.model.generator, loss_history_G)
-            # define the labels here so that we can reuse them (save time)
-            label_valid = torch.ones((self.batch_size, 1)).to(self.device)
-            label_fake = torch.zeros((self.batch_size, 1)).to(self.device)
         best_error = np.inf
         best_acc = -np.inf
         best_f1 = -np.inf

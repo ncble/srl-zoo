@@ -38,7 +38,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
         BaseInverseModel.__init__(self)
         BaseRewardModel.__init__(self)
         BaseRewardModel2.__init__(self)
-        SelfSupClassfier.__init__(self)
+        SelfSupClassfier.__init__(self, num_classes=500)
         self.state_dim = state_dim
         if img_shape is None:
             self.img_shape = (3, 224, 224)
