@@ -20,7 +20,7 @@ except:
 
 class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseRewardModel2, SelfSupClassfier):
     def __init__(self, state_dim=2, img_shape=None, action_dim=6, model_type="custom_cnn", losses=None,
-                 split_dimensions=None, n_hidden_reward=16, inverse_model_type="linear"):
+                 split_dimensions=None, spcls_num_classes=100, n_hidden_reward=16, inverse_model_type="linear"):
         """
         A model that can combine AE/VAE + Inverse + Forward + Reward models
         :param state_dim: (int)
@@ -38,7 +38,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
         BaseInverseModel.__init__(self)
         BaseRewardModel.__init__(self)
         BaseRewardModel2.__init__(self)
-        SelfSupClassfier.__init__(self, num_classes=500)
+        SelfSupClassfier.__init__(self, num_classes=spcls_num_classes)
         self.state_dim = state_dim
         if img_shape is None:
             self.img_shape = (3, 224, 224)
@@ -73,7 +73,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
         self.initInverseNet(state_dim_dict.get("inverse", self.state_dim), action_dim, model_type=inverse_model_type)
         self.initRewardNet(state_dim_dict.get("reward", self.state_dim), n_hidden=n_hidden_reward)
         self.initRewardNet2(state_dim_dict.get("reward2", self.state_dim), n_hidden=n_hidden_reward)
-        self.initSpClsmodel(state_dim_dict.get("reward2", self.state_dim), n_hidden=100)
+        self.initSpClsmodel(state_dim_dict.get("reward2", self.state_dim), n_hidden=100) ## only use along with reward2 !
 
         # Architecture
         if "autoencoder" in losses or "dae" in losses:

@@ -199,7 +199,7 @@ class SRL4robotics(BaseLearner):
     def __init__(self, state_dim, img_shape=None, model_type="resnet", inverse_model_type="linear", log_folder="logs/default",
                  seed=1, learning_rate=0.001, learning_rate_gan=(0.001, 0.001), l1_reg=0.0, l2_reg=0.0, cuda=-1,
                  multi_view=False, losses=None, losses_weights_dict=None, n_actions=6, beta=1,
-                 split_dimensions=-1, path_to_dae=None, state_dim_dae=200, occlusion_percentage=None, pretrained_weights_path=None, debug=False):
+                 split_dimensions=-1, num_dataset_episodes=100, path_to_dae=None, state_dim_dae=200, occlusion_percentage=None, pretrained_weights_path=None, debug=False):
 
         super(SRL4robotics, self).__init__(state_dim, BATCH_SIZE, seed, cuda)
 
@@ -211,6 +211,7 @@ class SRL4robotics(BaseLearner):
         self.img_shape = img_shape
         self.model_type = model_type
         self.pretrained_weights_path = pretrained_weights_path
+        self.num_dataset_episodes = num_dataset_episodes
         if model_type in ["linear", "mlp", "resnet", "custom_cnn", 'gan', 'unet'] \
                 or "autoencoder" in losses or "vae" in losses:
             self.use_forward_loss = "forward" in losses
@@ -236,7 +237,8 @@ class SRL4robotics(BaseLearner):
             else:
                 self.use_split = False
             self.module = SRLModules(state_dim=self.state_dim, img_shape=self.img_shape, action_dim=self.dim_action, model_type=model_type,
-                                     losses=losses, split_dimensions=split_dimensions, inverse_model_type=inverse_model_type)
+                                     losses=losses, split_dimensions=split_dimensions, spcls_num_classes=self.num_dataset_episodes, 
+                                     inverse_model_type=inverse_model_type)
         else:
             raise ValueError("Unknown model: {}".format(model_type))
 
@@ -245,8 +247,8 @@ class SRL4robotics(BaseLearner):
         self.cuda = cuda
         self.device = torch.device("cuda:{}".format(cuda) if torch.cuda.is_available() and (cuda >= 0) else "cpu")
 
-        if self.episode_prior:
-            self.prior_discriminator = PriorDiscriminator(2 * self.state_dim).to(self.device)
+        # if self.episode_prior:
+        #     self.prior_discriminator = PriorDiscriminator(2 * self.state_dim).to(self.device)
 
         self.module = self.module.to(self.device)
 
@@ -254,8 +256,8 @@ class SRL4robotics(BaseLearner):
             learnable_params = [param for param in self.module.parameters() if param.requires_grad]
             # learnable_params = list(self.module.parameters()) ## NEW [TODO]
 
-            if self.episode_prior:
-                learnable_params += [p for p in self.prior_discriminator.parameters()]
+            # if self.episode_prior:
+            #     learnable_params += [p for p in self.prior_discriminator.parameters()]
             self.optimizer = torch.optim.Adam(learnable_params, lr=learning_rate)
         else:
             assert not self.episode_prior, "NotImplementedError"
@@ -323,7 +325,7 @@ class SRL4robotics(BaseLearner):
 
         # HACK: TODO include GAN to the losses and add it to valid_models of ./srl_zoo/evaluation/enjoy_latent.py
         # assert set(losses).intersection(valid_models) != set(), "Error: Not supported losses " + ", ".join(difference)
-
+        ## TODO: No need to specify `num_dataset_episodes` since the self-supervised classifier is not used ??
         srl_model = SRL4robotics(state_dim, img_shape=img_shape, model_type=model_type, cuda=cuda, multi_view=multi_view,
                                  losses=losses, n_actions=n_actions, split_dimensions=split_dimensions,
                                  inverse_model_type=inverse_model_type, occlusion_percentage=occlusion_percentage)
@@ -359,6 +361,9 @@ class SRL4robotics(BaseLearner):
         print("\nYour are using the following weights for the losses:")
         pprint(self.losses_weights_dict)
         assert monitor_mode in ['loss', 'pbar'], "monitor should be either 'loss' or 'prgressbar'"
+        if self.use_spcls_loss:
+            assert self.num_dataset_episodes == np.sum(episode_starts), "Dataset episode numbers are inconsistent {} != {} \
+                (this is used for spcls loss). Please DO NOT use --training-set-size; use --val-size instead.".format(self.num_dataset_episodes, np.sum(episode_starts))
         # PREPARE DATA -------------------------------------------------------------------------------------------------
         # here, we organize the data into minibatches
         # and find pairs for the respective loss terms (for robotics priors only)

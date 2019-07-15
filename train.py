@@ -200,7 +200,7 @@ if __name__ == '__main__':
                            args.learning_rate_D, args.learning_rate_G),
                        l1_reg=args.l1_reg, l2_reg=args.l2_reg, cuda=args.gpu_num, multi_view=args.multi_view,
                        losses=losses, losses_weights_dict=losses_weights_dict, n_actions=n_actions, beta=args.beta,
-                       split_dimensions=split_dimensions, path_to_dae=args.path_to_dae,
+                       split_dimensions=split_dimensions, num_dataset_episodes=np.sum(episode_starts), path_to_dae=args.path_to_dae,
                        state_dim_dae=args.state_dim_dae, occlusion_percentage=args.occlusion_percentage, pretrained_weights_path=args.srl_pre_weights, debug=args.debug)
 
     if args.training_set_size > 0:
