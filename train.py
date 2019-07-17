@@ -77,6 +77,8 @@ if __name__ == '__main__':
     parser.add_argument('--monitor', type=str, default='loss',
                         choices=['pbar', 'loss'],
                         help="Monitor mode: either print the losses ('loss') or show the progressbar ('pbar'). (default 'loss')")
+    parser.add_argument('--monitorGTC', default=False, action='store_true',
+                        help="Monitor GTC at the end of each epoch. (be careful about the ground truth dimension, only support 2+2=4 dimension now)")
     parser.add_argument('--num-worker', type=int, default=10,
                         help="Number of CPUs to use for dataloader.")
     parser.add_argument('--srl-pre-weights', type=str, default=None,
@@ -217,7 +219,7 @@ if __name__ == '__main__':
     if args.figdir is not None:
         os.makedirs(args.figdir, exist_ok=True)
     loss_history, learned_states, pairs_name_weights = srl.learn(
-        images_path, actions, rewards, episode_starts, figdir=args.figdir, monitor_mode=args.monitor,
+        images_path, actions, rewards, episode_starts, figdir=args.figdir, monitor_mode=args.monitor, monitor_GTC=args.monitorGTC,
         ground_truth=ground_truth, relative_positions=relative_positions, target_positions=target_positions, truncate=truncate)
 
     # Update config with weights for each losses
@@ -235,7 +237,8 @@ if __name__ == '__main__':
 
     # PLOT REPRESENTATION & CORRELATION
     plotRepresentation(learned_states, rewards, name, add_colorbar=True, path=path)
-    correlationCall(exp_config, plot=not args.no_display_plots)
+    if args.monitorGTC:
+        correlationCall(exp_config, plot=not args.no_display_plots)
 
     # Do not close plot at the end of training
     # if learner.SAVE_PLOTS:

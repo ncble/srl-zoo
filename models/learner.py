@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 import json
 import sys
 import time
@@ -271,7 +272,6 @@ class SRL4robotics(BaseLearner):
             combined_E_params += [param for param in self.module.inverse_net.parameters()]
             combined_E_params += [param for param in self.module.reward_net.parameters()]
             combined_E_params += [param for param in self.module.classifier.parameters()]
-            # import ipdb; ipdb.set_trace()
             self.optimizer = torch.optim.Adam(combined_E_params, lr=learning_rate, betas=(0.5, 0.9))
             # [TODO: check learnable parameters]
         self.log_folder = log_folder
@@ -336,6 +336,7 @@ class SRL4robotics(BaseLearner):
     def learn(self, images_path, actions, rewards, episode_starts,
               figdir=None,
               monitor_mode='loss',
+              monitor_GTC=False,
               pretrained_weights_path=None,
               ground_truth=None,
               relative_positions=None,
@@ -487,7 +488,12 @@ class SRL4robotics(BaseLearner):
                     (sample_idx, obs, next_obs, action, reward, cls_gt) = next(dataloader)
                     obs, next_obs = obs.to(self.device), next_obs.to(self.device)
                     cls_gt = cls_gt.to(self.device)
-
+                    ## TODO TODO TODO TODO HACK HACK
+                    # import ipdb; ipdb.set_trace()
+                    reward = np.array(reward, dtype=int)
+                    reward[reward>0] = 1
+                    reward[reward<0] = -1
+                    reward = torch.from_numpy(reward)
                     if not self.use_gan: # gan need several update of encoder, so do not reset loss here !
                         # It's extremely important to release loss tensor, otherwise it will cause 'memory leak".
                         self.optimizer.zero_grad()
@@ -513,11 +519,9 @@ class SRL4robotics(BaseLearner):
                             self.module.add_inverse_loss(states, actions_st, next_states,
                                                          loss_manager, weight=self.losses_weights_dict['inverse'])
                         if self.use_reward_loss:
-                            rewards_st = np.array(reward).copy()
                             # label are usually [-1, 0, 1] for non-shaped-reward
-                            rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
+                            rewards_st = reward.to(self.device)
                             label_weights = torch.tensor([1.0, 100.0]).to(self.device)
-                            # import ipdb; ipdb.set_trace()
                             self.module.add_reward_loss(states, rewards_st, next_states, loss_manager,
                                                         label_weights=label_weights, ignore_index=-1,  # TODO
                                                         weight=self.losses_weights_dict['reward'])
@@ -552,9 +556,10 @@ class SRL4robotics(BaseLearner):
                                                          weight=self.losses_weights_dict['inverse'])
                         
                         if self.use_reward2_loss:
-                            rewards_st = np.array(reward).copy()
-                            rewards_st = 1-rewards_st
-                            rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
+                            # rewards_st = np.array(reward).copy()
+                            # rewards_st = 1-rewards_st
+                            # rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
+                            rewards_st = (1-reward).to(self.device)
                             # label are usually [-1, 0, 1] for non-shaped-reward, now it's [2, 1, 0]
                             label_weights = torch.tensor([100.0, 1.0]).to(self.device)
                             # distance_state should be estimated for 'next_state'
@@ -572,9 +577,8 @@ class SRL4robotics(BaseLearner):
                                                         loss_manager,
                                                         weight=self.losses_weights_dict['spcls'])
                         if self.use_reward_loss:
-                            rewards_st = np.array(reward).copy()
                             # label are usually [-1, 0, 1] for non-shaped-reward
-                            rewards_st = torch.from_numpy(rewards_st.astype(int)).to(self.device)
+                            rewards_st = reward.to(self.device)
                             label_weights = torch.tensor([1.0, 100.0]).to(self.device)
                             self.module.add_reward_loss(states_split_list[state_index["reward"]],
                                                         rewards_st,
@@ -584,8 +588,6 @@ class SRL4robotics(BaseLearner):
                                                         weight=self.losses_weights_dict['reward'])
 
                     if self.use_gan:
-                        # import ipdb
-                        # ipdb.set_trace()
                         loss, history_message = self.module.model.train_on_batch(obs, next_obs,
                                                                 self.optimizer_D, self.optimizer_G, self.optimizer,
                                                                 loss_manager_D, loss_manager_G, loss_manager,
@@ -804,16 +806,16 @@ class SRL4robotics(BaseLearner):
                             recall = f1_a / (f1_a + f1_c)
 
                         plotRepresentation(state_pred, rewards,
-                                           #    add_colorbar=epoch == 0,
                                            fit_pca=False,
                                            name="Learned State Representation (Training Data)",
                                            path=os.path.join(figdir_repr, "Epoch_{}.png".format(epoch+1)))
-                        # _, current_mean_gtc = printGTC(state_pred, ground_truth, target_positions, truncate=truncate)
-                        current_mean_gtc = 0.0
-                        if current_mean_gtc > best_gtc:
-                            best_gtc = current_mean_gtc                            
-                            best_gtc_model_path = ".".join(best_model_path.split(".")[:-1]) + "_gtc.pth"
-                            torch.save(self.module.state_dict(), best_gtc_model_path)
+                        if monitor_GTC:
+                            _, current_mean_gtc = printGTC(state_pred, ground_truth, target_positions, truncate=truncate)
+                            if current_mean_gtc > best_gtc:
+                                best_gtc = current_mean_gtc                            
+                                best_gtc_model_path = ".".join(best_model_path.split(".")[:-1]) + "_gtc.pth"
+                                torch.save(self.module.state_dict(), best_gtc_model_path)
+                        
                         if self.use_autoencoder or self.use_vae or self.use_dae or self.use_gan:
                             # Plot Reconstructed Image
                             if obs[0].shape[0] == 3:  # RGB
