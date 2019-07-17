@@ -808,7 +808,8 @@ class SRL4robotics(BaseLearner):
                                            fit_pca=False,
                                            name="Learned State Representation (Training Data)",
                                            path=os.path.join(figdir_repr, "Epoch_{}.png".format(epoch+1)))
-                        _, current_mean_gtc = printGTC(state_pred, ground_truth, target_positions, truncate=truncate)
+                        # _, current_mean_gtc = printGTC(state_pred, ground_truth, target_positions, truncate=truncate)
+                        current_mean_gtc = 0.0
                         if current_mean_gtc > best_gtc:
                             best_gtc = current_mean_gtc                            
                             best_gtc_model_path = ".".join(best_model_path.split(".")[:-1]) + "_gtc.pth"
