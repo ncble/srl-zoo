@@ -285,30 +285,3 @@ class RobotEnvDataset(torch.utils.data.Dataset):
 
             return img.astype(self.dtype)  # , y.astype(self.dtype)#.to(self.dtype), y.to(self.dtype)
         return img.astype(self.dtype)
-
-    @staticmethod
-    def preprocessLabels(labels):
-        # (Min, Max) labels[:, 0] = (0.452, 3.564)
-        # (Min, Max) labels[:, 1] = (0.222, 3.795)
-        # set to Min = 0.15, Max = 3.85
-        val_max = 3.85  # np.max(labels, axis=0)
-        val_min = 0.15  # np.min(labels, axis=0)
-        labels = (labels - val_min) / (val_max - val_min)
-        labels = 2*labels - 1
-
-        return labels
-
-    @staticmethod
-    def createTestMinibatchList(n_samples, batch_size):
-        """
-        Create list of minibatch for plotting
-        :param n_samples: (int)
-        :param batch_size: (int)
-        :return: ([np.array])
-        """
-        minibatchlist = []
-        for i in range(n_samples // batch_size + 1):
-            start_idx = i * batch_size
-            end_idx = min(n_samples, (i + 1) * batch_size)
-            minibatchlist.append(np.arange(start_idx, end_idx))
-        return minibatchlist
