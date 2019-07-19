@@ -189,7 +189,7 @@ if __name__ == '__main__':
     exp_config['experiment-name'] = experiment_name
     exp_config['n_actions'] = n_actions
     exp_config['multi-view'] = args.multi_view
-
+    exp_config['num_dataset_episodes'] = np.sum(episode_starts)
     if "dae" in losses:
         exp_config['occlusion-percentage'] = args.occlusion_percentage
     print('Log folder: {}'.format(args.log_folder))
