@@ -61,7 +61,7 @@ if __name__ == '__main__':
                         help='Force balanced sampling for episode independent prior instead of uniform')
     parser.add_argument('--losses', nargs='+', default=[], **parseLossArguments(
         choices=["forward", "inverse", "reward", "reward2", "spcls", "priors", "episode-prior", "reward-prior", "triplet",
-                 "autoencoder", "vae", "perceptual", "dae", "random", "gan"],
+                 "autoencoder", "vae", "perceptual", "dae", "random", "gan", "supervised"],
         help='The wanted losses. One may also want to specify a weight and dimension '
              'that apply as follows: "<name>:<weight>:<dimension>".'))
     parser.add_argument('--beta', type=float, default=1.0,
@@ -130,6 +130,7 @@ if __name__ == '__main__':
 
         assert not ("triplet" in losses and not args.multi_view), \
             "Triplet loss with single view is not supported, please use the --multi-view option"
+    
     args.losses = losses
     args.split_dimensions = split_dimensions
     if args.img_shape is None:
@@ -165,7 +166,7 @@ if __name__ == '__main__':
     actions = training_data['actions']
     # We assume actions are integers
     n_actions = int(np.max(actions) + 1)
-
+    
     # Try to convert old python 2 format
     try:
         images_path = np.array([path.decode("utf-8") for path in ground_truth['images_path']])

@@ -65,9 +65,6 @@ def buildConfig(args):
     l1_reg = args.l1_reg if hasattr(args, "l1_reg") else 0
     l2_reg = args.l2_reg if hasattr(args, "l2_reg") else 0
 
-    if "supervised" in args.losses:
-        args.inverse_model_type = None
-
     exp_config = OrderedDict(
         [("batch-size", args.batch_size),
         ("beta", beta),

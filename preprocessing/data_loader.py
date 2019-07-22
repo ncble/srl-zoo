@@ -79,7 +79,7 @@ def preprocessImage(image, img_reshape=None, convert_to_rgb=True, apply_occlusio
     return im
 
 
-class BalancedLabelSampler(Sampler):
+class BalancedLabelSampler(Sampler): ## TODO useless
     r"""Balanced classes sampler (batch-level)
 
     Arguments:
@@ -113,7 +113,7 @@ class BalancedLabelSampler(Sampler):
         return len(self.data_source)
 
 
-class StratifiedSampler(Sampler):
+class StratifiedSampler(Sampler): ## TODO useless
     """Stratified Sampling
     Provides equal representation of target classes in each batch
     """
@@ -172,6 +172,7 @@ class RobotEnvDataset(torch.utils.data.Dataset):
     def __init__(self, sample_indices, images_path, actions, rewards, episode_starts,
                  img_shape=None,
                  mode=1,
+                 ground_truth=None,
                  multi_view=False,
                  use_triplets=False,
                  apply_occlusion=False,
@@ -185,11 +186,15 @@ class RobotEnvDataset(torch.utils.data.Dataset):
         self.actions = actions
         self.rewards = rewards
         self.episode_starts = episode_starts
+        self.ground_truth = ground_truth # only used for supervised learning: mode == 3
+        if self.ground_truth is not None:
+            assert mode == 3, "Ground truth is only used for mode=3 (supervised learning)"
 
         self.img_shape = img_shape
         self.mode = mode
         self.use_triplets = use_triplets
         self.multi_view = multi_view
+        assert not self.multi_view
         # apply occlusion for training a DAE
         self.apply_occlusion = apply_occlusion
         self.occlusion_percentage = occlusion_percentage
@@ -227,61 +232,25 @@ class RobotEnvDataset(torch.utils.data.Dataset):
 
         image_path = self.images_path[index]
         # Load data and get label
-        if not self.multi_view:
-            if self.mode == 1:
-                img = self._get_one_img(image_path)
-                img_next = self._get_one_img(self.images_path[index+1])
-                action = self.actions[index]
-                reward = self.rewards[index]
-                cls_gt = self.class_labels[index]
-                return index, img.astype(self.dtype), img_next.astype(self.dtype), action, reward, cls_gt
-            elif self.mode == 0:
-                img = self._get_one_img(image_path)
-                return img.astype(self.dtype)
-            elif self.mode == 2:
-                img = self._get_one_img(image_path)
-                img_next = self._get_one_img(self.images_path[index+1])
-                reward = self.rewards[index]
-                return img.astype(self.dtype), img_next.astype(self.dtype), reward
-            else:
-                return
-
-        else:  # [TODO: not tested yet]
+        
+        if self.mode == 1: ## main mode, for training
+            img = self._get_one_img(image_path)
+            img_next = self._get_one_img(self.images_path[index+1])
+            action = self.actions[index]
+            reward = self.rewards[index]
+            cls_gt = self.class_labels[index]
+            return index, img.astype(self.dtype), img_next.astype(self.dtype), action, reward, cls_gt
+        elif self.mode == 0: # for evaluation
+            img = self._get_one_img(image_path)
+            return img.astype(self.dtype)
+        elif self.mode == 2: # for evaluation
+            img = self._get_one_img(image_path)
+            img_next = self._get_one_img(self.images_path[index+1])
+            reward = self.rewards[index]
+            return img.astype(self.dtype), img_next.astype(self.dtype), reward
+        elif self.mode == 3: # for supervised learning: learn ground truth
+            img = self._get_one_img(image_path)
+            ground_truth_state = self.ground_truth[index]
+            return img.astype(self.dtype), ground_truth_state.astype(self.dtype)
+        else:
             raise NotImplementedError
-            images = []
-            # Load different view of the same timestep
-            for i in range(2):
-                img = cv2.imread("{}_{}.jpg".format(image_path, i + 1))
-                if img is None:
-                    raise ValueError("tried to load {}_{}.jpg, but it was not found".format(image_path, i + 1))
-                images.append(preprocessImage(img, img_reshape=self.img_shape, apply_occlusion=self.apply_occlusion,
-                                              occlusion_percentage=self.occlusion_percentage))
-            ####################
-            # loading a negative observation
-            if use_triplets:
-                # End of file format for positive & negative observations (camera 1) - length : 6 characters
-                extra_chars = '_1.jpg'
-                # getting path for all files of same record episode, e.g path_to_data/record_001/frame[0-9]{6}*
-                digits_path = glob.glob(image_path[:-6] + '[0-9]*' + extra_chars)
-                # getting the current & all frames' timesteps
-                current = int(image_path[-6:])
-                # For all others extract last 6 digits (timestep) after removing the extra chars
-                all_frame_steps = [int(k[:-len(extra_chars)][-6:]) for k in digits_path]
-                # removing current positive timestep from the list
-                all_frame_steps.remove(current)
-
-                # negative timestep by random sampling
-                length_set_steps = len(all_frame_steps)
-                negative = all_frame_steps[random.randint(0, length_set_steps - 1)]
-                negative_path = '{}{:06d}'.format(image_path[:-6], negative)
-
-                im3 = cv2.imread(negative_path + "_1.jpg")
-                if im3 is None:
-                    raise ValueError("tried to load {}_{}.jpg, but it was not found".format(negative_path, 1))
-                im3 = preprocessImage(im3, img_reshape=img_shape)
-                # stacking along channels
-                images.append(im3)
-            img = np.dstack(images)
-
-            return img.astype(self.dtype)  # , y.astype(self.dtype)#.to(self.dtype), y.to(self.dtype)
-        return img.astype(self.dtype)

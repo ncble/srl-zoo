@@ -153,8 +153,10 @@ class BasicTrainer(BaseTrainer):
         self.img_shape = img_shape
 
     def build_model(self, model_type=None):
-
-        self.model = CustomCNN(self.state_dim, self.img_shape)
+        if model_type == 'custom_cnn':
+            self.model = CustomCNN(self.state_dim, self.img_shape)
+        else:
+            raise NotImplementedError
 
     def train_on_batch(self, obs, next_obs, optimizer, loss_manager, valid_mode=False, device=torch.device('cpu')):
         """

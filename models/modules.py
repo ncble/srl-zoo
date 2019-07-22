@@ -8,12 +8,12 @@ import torch
 from collections import OrderedDict
 try:
     # relative import: when executing as a package: python -m ...
-    from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss, spclsLoss
+    from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss, spclsLoss, l2Loss
     from .base_trainer import BaseTrainer
     from ..utils import printRed
 except:
     # absolute import: when executing directly: python train.py ...
-    from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss, spclsLoss
+    from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss, spclsLoss, l2Loss
     from models.base_trainer import BaseTrainer
     from utils import printRed
 
@@ -86,7 +86,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
             self.model = GANTrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type)
         else:
-            # for losses not depending on specific architecture (supervised, inverse, forward..)
+            # for losses not depending on specific architecture (random, supervised, inverse, forward..)
             self.model = BasicTrainer(state_dim=state_dim, img_shape=self.img_shape)
             self.model.build_model(model_type=model_type)  # TODO add the other model_type !!
 
@@ -128,7 +128,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
         inverseModelLoss(actions_pred, actions_st, weight=weight, loss_manager=loss_manager)
 
     def add_reward_loss(self, states, rewards_st, next_states, loss_manager, label_weights, ignore_index=-1, weight=100.0):
-        # import ipdb; ipdb.set_trace()
+
         rewards_pred = self.rewardModel(states, next_states)
         rewardModelLoss(rewards_pred, rewards_st, weight=weight, loss_manager=loss_manager,
                         label_weights=label_weights, ignore_index=ignore_index)
@@ -140,3 +140,7 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
     def add_spcls_loss(self, states, cls_gt, loss_manager, weight=100.0):
         cls_pred = self.classifier(states)
         spclsLoss(cls_pred, cls_gt, weight=weight, loss_manager=loss_manager)
+
+    def add_supervised_loss(self, gt_pred, gt_state, loss_manager, weight=1.0):
+        # import ipdb; ipdb.set_trace() # np.mean(np.sqrt(np.sum((A-B)**2, axis=-1))), # B = gt_state.cpu().numpy(), A = gt_pred.cpu().numpy()
+        l2Loss([(gt_pred-gt_state)], weight, loss_manager)
