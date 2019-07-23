@@ -8,12 +8,12 @@ import torch
 from collections import OrderedDict
 try:
     # relative import: when executing as a package: python -m ...
-    from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss, spclsLoss, l2Loss
+    from ..losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss, spclsLoss, l2Loss, reconstructionLoss
     from .base_trainer import BaseTrainer
     from ..utils import printRed
 except:
     # absolute import: when executing directly: python train.py ...
-    from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss, spclsLoss, l2Loss
+    from losses.losses import forwardModelLoss, inverseModelLoss, rewardModelLoss, spclsLoss, l2Loss, reconstructionLoss
     from models.base_trainer import BaseTrainer
     from utils import printRed
 
@@ -142,5 +142,6 @@ class SRLModules(BaseForwardModel, BaseInverseModel, BaseRewardModel, BaseReward
         spclsLoss(cls_pred, cls_gt, weight=weight, loss_manager=loss_manager)
 
     def add_supervised_loss(self, gt_pred, gt_state, loss_manager, weight=1.0):
-        # import ipdb; ipdb.set_trace() # np.mean(np.sqrt(np.sum((A-B)**2, axis=-1))), # B = gt_state.cpu().numpy(), A = gt_pred.cpu().numpy()
-        l2Loss([(gt_pred-gt_state)], weight, loss_manager)
+        # l2Loss([(gt_pred-gt_state)], weight, loss_manager)
+        loss = reconstructionLoss(gt_pred, gt_state)
+        loss_manager.addToLosses('l2_loss', weight, loss)
