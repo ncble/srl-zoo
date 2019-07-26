@@ -24,7 +24,7 @@ import time
 import sys
 import json
 import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1" ## Activate this for pytorch GPU debugging
+# os.environ['CUDA_LAUNCH_BLOCKING'] = "1" ## Activate this for pytorch GPU debugging
 
 ## TODO HACK HACK: solve pytorch dataloader too fast, file descriptor (FDs) missing issue
 # see issue #973: https://github.com/pytorch/pytorch/issues/973#issuecomment-346405667
