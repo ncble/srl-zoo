@@ -178,7 +178,7 @@ class RobotEnvDataset(torch.utils.data.Dataset):
                  apply_occlusion=False,
                  occlusion_percentage=0.5,
                  dtype=np.float32,
-                 img_extension="jpg"):
+                 img_extension="png"):
         super(RobotEnvDataset, self).__init__()
         # Initialization
         self.sample_indices = sample_indices
