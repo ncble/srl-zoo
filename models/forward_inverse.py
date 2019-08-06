@@ -67,7 +67,6 @@ class BaseInverseModel(BaseModelSRL):
         :param next_state: (torch.Tensor)
         :return: probability of each action
         """
-        # input: concatenation of state & next state over the 2nd dimension
         return self.inverse_net(next_state-state)
 
 
